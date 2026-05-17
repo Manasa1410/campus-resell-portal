@@ -1,0 +1,154 @@
+### 🌐 BASE VARIABLES
+@baseUrl = http://localhost:4000
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhMDU0ZTM3MDBhYmQwZDUzYmQ4NTkzOCIsImlhdCI6MTc3ODczMjU5OSwiZXhwIjoxNzc5MzM3Mzk5fQ.UnTgfkRY3IIvrhrlQrn6lI2fRLuARu2fA_zFCZomMws
+@adminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhMDU1NDgyMDBhYmQwZDUzYmQ4NTkzZSIsImlhdCI6MTc3ODczNDIxNSwiZXhwIjoxNzc5MzM5MDE1fQ.c_9xM0HAkSYBKz3_9RdNCv6l_N0ksLTGdwkmFWmi-jY
+
+##################################################
+### 🔐 AUTH APIs
+##################################################
+
+### 📝 Register User
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "name": "Maha",
+  "email": "maha@college.edu",
+  "password": "123456"
+}
+
+###
+
+### 🔑 Login User
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "maha@college.edu",
+  "password": "123456"
+}
+
+###
+
+### 👤 Get Profile
+GET {{baseUrl}}/api/auth/profile
+Authorization: Bearer {{token}}
+
+##################################################
+### 📦 PRODUCT APIs
+##################################################
+
+### ➕ Create Product
+POST {{baseUrl}}/api/products
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "title": "Mobile Phone",
+  "description": "Good condition mobile phone",
+  "price": 300,
+  "category": "Electronics",
+  "images": []
+}
+
+###
+
+### 📦 Get All Products
+GET {{baseUrl}}/api/products
+
+###
+
+### 🔍 Get Single Product
+GET {{baseUrl}}/api/products/6a054cfb00abd0d53bd85919
+
+###
+
+### ✏️ Update Product
+PUT {{baseUrl}}/api/products/6a054cfb00abd0d53bd85919
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "price": 250
+}
+
+###
+
+### ❌ Delete Product
+DELETE {{baseUrl}}/api/products/6a054cfb00abd0d53bd85919
+Authorization: Bearer {{token}}
+
+###
+
+### ✅ Mark as Sold
+PUT {{baseUrl}}/api/products/6a054d3b00abd0d53bd8591e/sold
+Authorization: Bearer {{token}}
+
+##################################################
+### 💬 CHAT APIs
+##################################################
+
+### 💬 Create Chat
+POST {{baseUrl}}/api/chats
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "userId": "6a054c7300abd0d53bd85911",
+  "productId": "6a054d3b00abd0d53bd8591e"
+}
+
+###
+
+### 📥 Get User Chats
+GET {{baseUrl}}/api/chats
+Authorization: Bearer {{token}}
+
+###
+
+### 📜 Get Messages
+GET {{baseUrl}}/api/chats/6a054ddd00abd0d53bd8592f/messages
+Authorization: Bearer {{token}}
+
+##################################################
+### 🚨 REPORT APIs
+##################################################
+
+### 🚨 Create Report
+POST {{baseUrl}}/api/reports
+Content-Type: application/json
+Authorization: Bearer {{token}}
+
+{
+  "reportedUser": "6a054e3700abd0d53bd85938",
+  "product": "6a054d3b00abd0d53bd8591e",
+  "reason": "Spam or fake product"
+}
+
+###
+
+### 📋 Get All Reports (Admin)
+GET {{baseUrl}}/api/reports
+Authorization: Bearer {{adminToken}}
+
+###
+
+### 🔄 Update Report Status
+PUT {{baseUrl}}/api/reports/6a0550a900abd0d53bd8593b
+Content-Type: application/json
+Authorization: Bearer {{adminToken}}
+
+{
+  "status": "reviewed",
+  "adminNote": "Checked and resolved"
+}
+
+###
+
+### 🔨 Ban User
+PUT {{baseUrl}}/api/reports/ban/6a054c7300abd0d53bd85911
+Authorization: Bearer {{adminToken}}
+
+### 🔓 Unban User
+PUT {{baseUrl}}/api/reports/unban/6a054c7300abd0d53bd85911
+Authorization: Bearer {{adminToken}}
