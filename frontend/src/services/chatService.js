@@ -21,3 +21,21 @@ export const createChat = async (productId, sellerId) => {
 
   return data;
 };
+
+// 🗑️ delete single message
+export const deleteMessage = async (id, deleteType) => {
+  const { data } = await API.delete(`/chats/message/${id}`, { data: { deleteType } });
+  return data;
+};
+
+// 🗑️ delete full chat
+export const deleteChat = async (conversationId) => {
+  const { data } = await API.delete(`/chats/${conversationId}`);
+  return data;
+};
+
+// 🔢 Get total unread count for global badge
+export const getUnreadMessageCount = async () => {
+  const { data } = await API.get("/chats/unread-count");
+  return data;
+};

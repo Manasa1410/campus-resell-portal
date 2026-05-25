@@ -1,19 +1,65 @@
+import mongoose from "mongoose";
 import Report from "../models/reportModel.js";
 import User from "../models/userModel.js";
+import Product from "../models/productModel.js";
 
 //
 // 🚨 Create Report
 //
 export const createReport = async (req, res) => {
   try {
-    const { reportedUser, product, reason } = req.body;
+    const { reportedUser, product, reason, description } = req.body;
+    const reporterId = req.user.id;
+    
+    // Map to polymorphic fields used in backend/models/reportModel.js
+    const targetId = reportedUser || product;
+    const targetType = reportedUser ? "User" : "Product";
 
-    const report = await Report.create({
-      reportedUser,
-      reportedBy: req.user.id,
-      product,
-      reason,
+    // 1. Validations
+    if (!targetId) {
+      return res.status(400).json({ success: false, message: "Report target (User or Product) is required" });
+    }
+
+    if (targetType === "User" && targetId.toString() === reporterId.toString()) {
+      return res.status(400).json({ success: false, message: "You cannot report yourself" });
+    }
+
+    // 2. Prevent Duplicate Reports
+    const existingReport = await Report.findOne({
+      reporter: reporterId,
+      targetId,
+      targetType,
     });
+
+    if (existingReport) {
+      return res.status(400).json({ success: false, message: "You have already reported this item/user" });
+    }
+
+    // 3. Create Report
+    const report = await (await Report.create({
+      reporter: reporterId,
+      targetId,
+      targetType,
+      reason,
+      description,
+    })).populate("reporter", "name");
+
+    // 4. Auto Moderation: If a user gets 5+ reports, ban them
+    if (targetType === "User") {
+      const reportCount = await Report.countDocuments({ targetId, targetType: "User" });
+      if (reportCount >= 5) {
+        await User.findByIdAndUpdate(targetId, { isBanned: true });
+      }
+    } else {
+      // Check the seller of the product
+      const reportedProduct = await Product.findById(targetId);
+      if (reportedProduct) {
+        const sellerReports = await Report.countDocuments({ targetId: reportedProduct.seller, targetType: "User" });
+        if (sellerReports >= 5) {
+          await User.findByIdAndUpdate(reportedProduct.seller, { isBanned: true });
+        }
+      }
+    }
 
     res.status(201).json({
       success: true,
@@ -32,10 +78,9 @@ export const createReport = async (req, res) => {
 //
 export const getReports = async (req, res) => {
   try {
-    const reports = await Report.find()
-      .populate("reportedUser", "name email")
-      .populate("reportedBy", "name email")
-      .populate("product", "title");
+    const reports = await Report.find().sort({ createdAt: -1 })
+      .populate("reporter", "name email")
+      .populate("targetId"); // Mongoose uses refPath to populate either User or Product
 
     res.json({
       success: true,
@@ -56,7 +101,6 @@ export const getReports = async (req, res) => {
 export const updateReportStatus = async (req, res) => {
   try {
     const { status, adminNote } = req.body;
-
     const report = await Report.findById(req.params.id);
 
     if (!report) {
@@ -66,15 +110,11 @@ export const updateReportStatus = async (req, res) => {
       });
     }
 
-    report.status = status || report.status;
-    report.adminNote = adminNote || report.adminNote;
+    if (status) report.status = status;
+    if (adminNote !== undefined) report.adminNote = adminNote;
 
     await report.save();
-
-    res.json({
-      success: true,
-      report,
-    });
+    res.json({ success: true, report });
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -117,10 +157,21 @@ export const banUser = async (req, res) => {
 
 // controller // Unban User (Admin)
 export const unbanUser = async (req, res) => {
-  const user = await User.findById(req.params.userId);
+  try {
+    const user = await User.findById(req.params.userId);
 
-  user.isBanned = false;
-  await user.save();
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: "User not found",
+      });
+    }
 
-  res.json({ success: true, message: "User unbanned" });
+    user.isBanned = false;
+    await user.save();
+
+    res.json({ success: true, message: "User unbanned" });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
 };

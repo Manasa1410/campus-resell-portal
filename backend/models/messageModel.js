@@ -6,33 +6,48 @@ const messageSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: "Chat",
       required: true,
-      index: true, // 🔥 improves query speed
     },
-
     sender: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-
     text: {
       type: String,
       required: true,
-      trim: true,
     },
-
-    isRead: {
+    file: { // For images/files (future enhancement)
+      type: String,
+    },
+    status: { // Message status: sent, delivered, seen
+      type: String,
+      enum: ['sent', 'delivered', 'seen'],
+      default: 'sent',
+    },
+    readBy: [ // Users who have seen this message
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    isDeletedForEveryone: { // If true, message content is hidden for all
       type: Boolean,
       default: false,
     },
-
-    // Optional: for attachments later
-    image: {
-      type: String,
-      default: "",
+    deletedFor: [ // Array of user IDs for whom this message is deleted (soft delete for me)
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+      },
+    ],
+    edited: { // To indicate if message was edited (future enhancement)
+      type: Boolean,
+      default: false,
     },
   },
   { timestamps: true }
 );
 
-export default mongoose.model("Message", messageSchema);
+const Message = mongoose.model("Message", messageSchema);
+
+export default Message;

@@ -1,22 +1,43 @@
-import { useEffect, useState } from "react";
+/* eslint-disable react-hooks/set-state-in-effect */
+import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import API from "../../services/api";
 import ProductCard from "../../components/ProductCard";
-import Loader from "../../components/Loader";
+import useAuth from "../../hooks/useAuth";
+import { toast } from "react-hot-toast";
+import Button from "../../components/ui/Button";
+import Card from "../../components/ui/Card";
+import EmptyState from "../../components/ui/EmptyState";
+import Icon from "../../components/ui/Icon";
+import { ProductGridSkeleton } from "../../components/ui/Skeleton";
+
+const categories = [
+  { name: "Books", icon: "book", tone: "bg-blue-50 text-blue-700 dark:bg-blue-950/40 dark:text-blue-200" },
+  { name: "Electronics", icon: "laptop", tone: "bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-200" },
+  { name: "Cycles", icon: "cycle", tone: "bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-200" },
+  { name: "Others", icon: "spark", tone: "bg-amber-50 text-amber-700 dark:bg-amber-950/40 dark:text-amber-200" },
+];
+
+const locations = ["All", "North Campus", "South Campus", "East Block", "West Block", "Hostel Area"];
 
 const Home = () => {
+  const { user } = useAuth();
   const [products, setProducts] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [keyword, setKeyword] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("All");
-  const [priceFilter, setPriceFilter] = useState("all");
+  const [minPrice, setMinPrice] = useState("");
+  const [maxPrice, setMaxPrice] = useState("");
+  const [sortBy, setSortBy] = useState("newest");
   const [availabilityFilter, setAvailabilityFilter] = useState("all");
+  const [locationFilter, setLocationFilter] = useState("All");
 
-  // 📥 Fetch products from backend
   const fetchProducts = async () => {
     try {
       const { data } = await API.get("/products");
       setProducts(data.products || []);
     } catch (err) {
-      alert(err.response?.data?.message || "Failed to load products");
+      toast.error(err.response?.data?.message || "Failed to load products");
     } finally {
       setLoading(false);
     }
@@ -26,150 +47,220 @@ const Home = () => {
     fetchProducts();
   }, []);
 
-  const categories = [
-    "All",
-    ...Array.from(new Set(products.map((product) => product.category).filter(Boolean)))
-  ];
+  const dynamicCategories = useMemo(
+    () => ["All", ...Array.from(new Set(products.map((product) => product.category).filter(Boolean)))],
+    [products]
+  );
 
-  const filteredProducts = products.filter((product) => {
-    const price = Number(product.price);
+  const filteredProducts = useMemo(() => {
+    return products
+      .filter((product) => {
+        if (user && product.seller?._id === user._id) return false;
 
-    if (categoryFilter !== "All" && product.category !== categoryFilter) {
-      return false;
-    }
+        const price = Number(product.price);
+        const title = product.title?.toLowerCase() || "";
 
-    if (availabilityFilter !== "all" && product.status !== availabilityFilter) {
-      return false;
-    }
+        if (keyword && !title.includes(keyword.toLowerCase())) return false;
+        if (categoryFilter !== "All" && product.category !== categoryFilter) return false;
+        if (availabilityFilter !== "all" && product.status !== availabilityFilter) return false;
+        if (locationFilter !== "All" && product.location !== locationFilter) return false;
+        if (minPrice && price < Number(minPrice)) return false;
+        if (maxPrice && price > Number(maxPrice)) return false;
 
-    if (priceFilter === "under-500" && price >= 500) {
-      return false;
-    }
+        return true;
+      })
+      .sort((a, b) => {
+        if (sortBy === "priceLowHigh") return a.price - b.price;
+        if (sortBy === "priceHighLow") return b.price - a.price;
+        if (sortBy === "oldest") return new Date(a.createdAt) - new Date(b.createdAt);
+        return new Date(b.createdAt) - new Date(a.createdAt);
+      });
+  }, [products, user, keyword, categoryFilter, availabilityFilter, locationFilter, minPrice, maxPrice, sortBy]);
 
-    if (priceFilter === "500-999" && (price < 500 || price > 999)) {
-      return false;
-    }
+  const featuredProducts = filteredProducts.slice(0, 3);
+  const recentlyAdded = filteredProducts.slice(0, 6);
 
-    if (priceFilter === "1000+" && price < 1000) {
-      return false;
-    }
-
-    return true;
-  });
-
-  // ⏳ Loading state
-  if (loading) return <Loader />;
+  if (loading) {
+    return (
+      <div className="mx-auto max-w-7xl space-y-8">
+        <div className="h-72 animate-pulse rounded-xl bg-slate-200 dark:bg-slate-800" />
+        <ProductGridSkeleton />
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6 max-w-7xl mx-auto">
-      <section className="rounded-4xl bg-linear-to-r from-slate-900 via-indigo-700 to-sky-600 text-white p-10 shadow-xl mb-8 overflow-hidden">
-        <div className="grid gap-6 lg:grid-cols-[2fr_1fr] items-center">
-          <div>
-            <p className="uppercase tracking-[0.35em] text-sm text-slate-200 mb-4">
-              Campus Resell Marketplace
+    <div className="mx-auto max-w-7xl space-y-10">
+      <section className="overflow-hidden rounded-3xl bg-card text-text-primary shadow-2xl shadow-indigo-500/5">
+        <div className="grid gap-8 p-6 sm:p-8 lg:grid-cols-[1.2fr_0.8fr] lg:p-10">
+          <div className="flex flex-col justify-center">
+            <p className="mb-4 text-sm font-bold uppercase tracking-widest text-accent-indigo">Campus marketplace</p>
+            <h1 className="max-w-3xl text-4xl font-black leading-tight sm:text-5xl dark:text-white">Buy & Sell Easily on Campus</h1>
+            <p className="mt-5 max-w-2xl text-base leading-7 text-text-secondary">
+              Discover books, gadgets, cycles, and daily essentials from students around you. List products fast, chat safely, and close deals with confidence.
             </p>
-            <h1 className="text-4xl md:text-5xl font-extrabold leading-tight">
-              Shop smart. Sell fast. Buy campus essentials.
-            </h1>
-            <p className="mt-4 text-slate-200 max-w-xl leading-7">
-              Discover quality products listed by students near you, connect directly with sellers, and keep your campus shopping experience fast, secure, and affordable.
-            </p>
-            <div className="mt-8 grid gap-4 sm:grid-cols-3">
-              <div className="rounded-3xl bg-white/10 p-4">
-                <p className="text-3xl font-semibold">{products.length}</p>
-                <p className="text-sm text-slate-200">Active Listings</p>
-              </div>
-              <div className="rounded-3xl bg-white/10 p-4">
-                <p className="text-3xl font-semibold">{products.filter((item) => item.status === "available").length}</p>
-                <p className="text-sm text-slate-200">Available Now</p>
-              </div>
-              <div className="rounded-3xl bg-white/10 p-4">
-                <p className="text-3xl font-semibold">4.8/5</p>
-                <p className="text-sm text-slate-200">Trusted Campus Deals</p>
-              </div>
+            <div className="mt-8 flex flex-col gap-3 sm:flex-row">
+              <Button as="a" href="#products" size="lg">
+                Browse Products
+              </Button>
+              <Button as={Link} to={user ? "/add-product" : "/login"} variant="secondary" size="lg">
+                Sell Product
+              </Button>
             </div>
           </div>
 
-          <div className="rounded-4xl bg-white/10 p-6 backdrop-blur-xl border border-white/10">
-            <h2 className="text-xl font-semibold mb-4">Featured Picks</h2>
-            <div className="space-y-4">
-              {products.slice(0, 3).map((product) => (
-                <div key={product._id} className="rounded-3xl bg-slate-900/70 p-4">
-                  <p className="font-semibold">{product.title}</p>
-                  <p className="text-sm text-slate-300">₹{product.price}</p>
-                </div>
-              ))}
-            </div>
+          <div className="grid gap-4 sm:grid-cols-3 lg:grid-cols-1">
+            <Card className="bg-muted/50 p-5 text-text-primary backdrop-blur">
+              <p className="text-3xl text-black dark:text-white">{products.length}</p>
+              <p className="text-sm text-black dark:text-white">Total listings</p>
+            </Card>
+            <Card className="bg-muted/50 p-5 text-text-primary backdrop-blur">
+              <p className="text-3xl text-black dark:text-white">{products.filter((item) => item.status === "available").length}</p>
+              <p className="text-sm text-black dark:text-white">Available now</p>
+            </Card>
+            <Card className="bg-muted/50 p-5 text-text-primary backdrop-blur">
+              <p className="text-3xl text-black dark:text-white">{dynamicCategories.length - 1}</p>
+              <p className="text-sm text-black dark:text-white">Categories</p>
+            </Card>
           </div>
         </div>
       </section>
 
       <section>
-        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between mb-6">
+        <div className="mb-5 flex items-end justify-between gap-4">
           <div>
-            <p className="text-sm uppercase tracking-[0.3em] text-slate-500 mb-1">
-              Explore Listings
-            </p>
-            <h2 className="text-3xl font-bold">Latest Campus Finds</h2>
-          </div>
-          <p className="text-sm text-slate-600">
-            Browse by category, price, and availability.
-          </p>
-        </div>
-
-        <div className="rounded-3xl bg-white p-5 mb-6 shadow-sm border border-slate-200">
-          <div className="grid gap-4 md:grid-cols-3">
-            <label className="block">
-              <span className="text-sm font-medium text-slate-600">Category</span>
-              <select
-                value={categoryFilter}
-                onChange={(e) => setCategoryFilter(e.target.value)}
-                className="mt-2 block w-full rounded-xl border border-slate-300 bg-slate-50 p-3 text-slate-900"
-              >
-                {categories.map((category) => (
-                  <option key={category} value={category}>
-                    {category}
-                  </option>
-                ))}
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="text-sm font-medium text-slate-600">Price</span>
-              <select
-                value={priceFilter}
-                onChange={(e) => setPriceFilter(e.target.value)}
-                className="mt-2 block w-full rounded-xl border border-slate-300 bg-slate-50 p-3 text-slate-900"
-              >
-                <option value="all">All prices</option>
-                <option value="under-500">Under ₹500</option>
-                <option value="500-999">₹500 - ₹999</option>
-                <option value="1000+">₹1000+</option>
-              </select>
-            </label>
-
-            <label className="block">
-              <span className="text-sm font-medium text-slate-600">Availability</span>
-              <select
-                value={availabilityFilter}
-                onChange={(e) => setAvailabilityFilter(e.target.value)}
-                className="mt-2 block w-full rounded-xl border border-slate-300 bg-slate-50 p-3 text-slate-900"
-              >
-                <option value="all">All statuses</option>
-                <option value="available">Available</option>
-                <option value="sold">Sold</option>
-              </select>
-            </label>
+            <p className="text-sm font-bold uppercase tracking-widest text-text-secondary dark:text-white">Featured</p>
+            <h2 className="text-2xl font-black text-text-primary dark:text-white tracking-tight">Featured Products</h2>
           </div>
         </div>
-
-        {filteredProducts.length === 0 ? (
-          <div className="rounded-3xl border border-dashed border-slate-300 p-10 text-center text-slate-500">
-            No products match your filter choices.
+        {featuredProducts.length > 0 ? (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
+            {featuredProducts.map((product) => (
+              <ProductCard key={product._id} product={product} />
+            ))}
           </div>
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-            {filteredProducts.map((product) => (
+          <EmptyState title="No featured products" description="Products will appear here as soon as campus listings are available." icon={<Icon name="bag" />} />
+        )}
+      </section>
+
+      <section>
+        <div className="mb-5">
+          <p className="text-sm font-bold uppercase tracking-widest text-text-secondary dark:text-white">Categories</p>
+          <h2 className="text-2xl font-black text-text-primary dark:text-white tracking-tight">Shop by Category</h2>
+        </div>
+        <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
+          {categories.map((category) => (
+            <button
+              type="button"
+              key={category.name}
+              onClick={() => setCategoryFilter(category.name)}
+              className="rounded-2xl bg-card p-5 text-left shadow-lg shadow-slate-200/40 dark:shadow-none transition-all duration-300 hover:-translate-y-1 hover:shadow-xl dark:hover:bg-slate-800/50"
+            >
+              <span className={`mb-4 grid h-12 w-12 place-items-center rounded-xl ${category.tone}`}>
+                <Icon name={category.icon} />
+              </span>
+              <span className="font-bold text-text-primary dark:text-white">{category.name}</span>
+              <span className="mt-1 block text-sm text-text-secondary">
+                {products.filter((product) => product.category === category.name).length} listings
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
+
+      <section id="products" className="space-y-6">
+        <div className="flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-widest text-text-secondary dark:text-white">Recently added</p>
+            <h2 className="text-2xl font-black text-text-primary dark:text-white tracking-tight">Browse Products</h2>
+          </div>
+          <p className="text-sm text-text-secondary">{filteredProducts.length} products found</p>
+        </div>
+
+        <Card className="p-4 sm:p-5 shadow-xl shadow-slate-200/30 dark:shadow-none">
+          <div className="grid gap-4 lg:grid-cols-[1.5fr_1fr_1fr]">
+            <label className="relative block">
+              <Icon name="search" className="absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-text-secondary" />
+              <input
+                value={keyword}
+                onChange={(e) => setKeyword(e.target.value)}
+                placeholder="Search by title..."
+                className="w-full rounded-xl bg-muted py-3 pl-10 pr-4 text-sm outline-none transition focus:bg-card focus:ring-4 focus:ring-accent-indigo/10 text-text-primary dark:text-white"
+              />
+            </label>
+
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              className="rounded-xl bg-muted p-3 text-sm outline-none focus:ring-4 focus:ring-accent-indigo/10 text-text-primary dark:text-white"
+            >
+              {dynamicCategories.map((category) => (
+                <option key={category} value={category}>
+                  {category}
+                </option>
+              ))}
+            </select>
+
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              className="rounded-xl bg-muted p-3 text-sm outline-none focus:ring-4 focus:ring-accent-indigo/10 text-text-primary dark:text-white"
+            >
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="priceLowHigh">Price: Low to High</option>
+              <option value="priceHighLow">Price: High to Low</option>
+            </select>
+          </div>
+
+          <div className="mt-4 grid gap-4 md:grid-cols-4">
+            <input
+              type="number"
+              placeholder="Min price"
+              value={minPrice}
+              onChange={(e) => setMinPrice(e.target.value)}
+              className="rounded-xl bg-muted p-3 text-sm outline-none focus:ring-4 focus:ring-accent-indigo/10 text-text-primary dark:text-white"
+            />
+            <input
+              type="number"
+              placeholder="Max price"
+              value={maxPrice}
+              onChange={(e) => setMaxPrice(e.target.value)}
+              className="rounded-xl bg-muted p-3 text-sm outline-none focus:ring-4 focus:ring-accent-indigo/10 text-text-primary dark:text-white"
+            />
+            <select
+              value={locationFilter}
+              onChange={(e) => setLocationFilter(e.target.value)}
+              className="rounded-xl bg-muted p-3 text-sm outline-none focus:ring-4 focus:ring-accent-indigo/10 text-text-primary dark:text-white"
+            >
+              {locations.map((location) => (
+                <option key={location} value={location}>
+                  {location}
+                </option>
+              ))}
+            </select>
+            <select
+              value={availabilityFilter}
+              onChange={(e) => setAvailabilityFilter(e.target.value)}
+              className="rounded-xl bg-muted p-3 text-sm outline-none focus:ring-4 focus:ring-accent-indigo/10 text-text-primary dark:text-white"
+            >
+              <option value="all">All statuses</option>
+              <option value="available">Available</option>
+              <option value="sold">Sold</option>
+            </select>
+          </div>
+        </Card>
+
+        {recentlyAdded.length === 0 ? (
+          <EmptyState
+            title="No products match your filters"
+            description="Try changing the category, price range, or search term to find more campus deals."
+            icon={<Icon name="search" />}
+          />
+        ) : (
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {recentlyAdded.map((product) => (
               <ProductCard key={product._id} product={product} />
             ))}
           </div>

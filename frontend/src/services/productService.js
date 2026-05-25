@@ -12,6 +12,12 @@ export const getProductById = async (id) => {
   return data;
 };
 
+// 👤 Get products added by the logged-in user
+export const getMyProducts = async () => {
+  const { data } = await API.get("/products/my-products");
+  return data;
+};
+
 // ➕ Create new product
 export const createProduct = async (formData) => {
   const { data } = await API.post("/products", formData);
@@ -39,5 +45,15 @@ export const updateProductStatus = async (id, status) => {
 // ✅ Mark a product as sold (seller only)
 export const markProductAsSold = async (id) => {
   const { data } = await API.put(`/products/${id}/sold`);
+  return data;
+};
+
+export const getWishlistProducts = async () => {
+  const { data } = await API.get("/products/wishlist");
+  return data;
+};
+
+export const toggleWishlist = async (id) => {
+  const { data } = await API.post(`/products/${id}/wishlist`);
   return data;
 };

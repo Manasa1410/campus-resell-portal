@@ -1,6 +1,6 @@
 ### 🌐 BASE VARIABLES
-@baseUrl = http://localhost:4000
-@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhMDU0ZTM3MDBhYmQwZDUzYmQ4NTkzOCIsImlhdCI6MTc3ODczMjU5OSwiZXhwIjoxNzc5MzM3Mzk5fQ.UnTgfkRY3IIvrhrlQrn6lI2fRLuARu2fA_zFCZomMws
+@baseUrl = http://localhost:5001
+@token = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhMGE5YzBlZDA3MmU4ZWJiNzMwNWZjZiIsImlhdCI6MTc3OTA4OTU5MSwiZXhwIjoxNzc5Njk0MzkxfQ.pTPQzZf1ziXifxqMrQPM75Na0-tQqFzdm3TTjs9SLNo
 @adminToken = eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpZCI6IjZhMDU1NDgyMDBhYmQwZDUzYmQ4NTkzZSIsImlhdCI6MTc3ODczNDIxNSwiZXhwIjoxNzc5MzM5MDE1fQ.c_9xM0HAkSYBKz3_9RdNCv6l_N0ksLTGdwkmFWmi-jY
 
 ##################################################
@@ -24,7 +24,7 @@ POST {{baseUrl}}/api/auth/login
 Content-Type: application/json
 
 {
-  "email": "maha@college.edu",
+  "email": "dhanvi@college.edu",
   "password": "123456"
 }
 

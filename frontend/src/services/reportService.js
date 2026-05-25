@@ -13,17 +13,19 @@ export const getReports = async () => {
 };
 
 // 🔄 Update report status (Admin)
-export const updateReportStatus = async (id, status) => {
-  const { data } = await API.put(`/reports/${id}`, {
-    status,
-  });
+export const updateReportStatus = async (id, status, adminNote = "") => {
+  const { data } = await API.put(`/reports/${id}`, { status, adminNote });
   return data;
 };
 
 // 🔨 Ban user (Admin action)
 export const banUser = async (userId) => {
-  const { data } = await API.put(`/reports/ban`, {
-    userId,
-  });
+  const { data } = await API.put(`/reports/ban/${userId}`);
+  return data;
+};
+
+// 🔓 Unban user (Admin action)
+export const unbanUser = async (userId) => {
+  const { data } = await API.put(`/reports/unban/${userId}`);
   return data;
 };

@@ -1,27 +1,87 @@
+/* eslint-disable react-hooks/set-state-in-effect, react-hooks/exhaustive-deps */
 import { useEffect, useState, useContext, useRef } from "react";
 import { useSearchParams } from "react-router-dom";
 import { socket } from "../../sockets/socket";
-import Loader from "../../components/Loader";
-import { getChats, getMessages } from "../../services/chatService";
+import { getChats, getMessages, deleteMessage, deleteChat } from "../../services/chatService";
+import ReportModal from "../../services/ReportModal";
 import { AuthContext } from "../../context/AuthContext";
+import { toast } from "react-hot-toast";
+
+const ChatSkeleton = () => (
+  <div className="grid h-[calc(100vh-150px)] min-h-155 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md lg:grid-cols-[360px_1fr]">
+    <div className="border-r border-slate-200 p-4">
+      <div className="mb-5 h-9 w-40 animate-pulse rounded-xl bg-slate-200" />
+      {[1, 2, 3, 4, 5].map((item) => (
+        <div key={item} className="mb-3 flex animate-pulse gap-3 rounded-xl p-3">
+          <div className="h-12 w-12 rounded-full bg-slate-200" />
+          <div className="flex-1 space-y-2">
+            <div className="h-4 w-3/4 rounded bg-slate-200" />
+            <div className="h-3 w-1/2 rounded bg-slate-100" />
+          </div>
+        </div>
+      ))}
+    </div>
+    <div className="flex flex-col p-6">
+      <div className="h-16 animate-pulse rounded-xl bg-slate-100" />
+      <div className="mt-8 flex-1 space-y-4">
+        <div className="h-12 w-2/5 animate-pulse rounded-2xl bg-slate-100" />
+        <div className="ml-auto h-12 w-1/2 animate-pulse rounded-2xl bg-blue-100" />
+        <div className="h-12 w-1/3 animate-pulse rounded-2xl bg-slate-100" />
+      </div>
+    </div>
+  </div>
+);
+
+const ActionMenu = ({ align = "right", children }) => (
+  <div
+    className={`absolute top-8 z-30 w-48 overflow-hidden rounded-xl border border-slate-200 bg-white py-1 text-sm text-slate-700 shadow-xl ${
+      align === "left" ? "left-0" : "right-0"
+    }`}
+  >
+    {children}
+  </div>
+);
+
+const MenuButton = ({ children, danger, onClick }) => (
+  <button
+    type="button"
+    onClick={onClick}
+    className={`block w-full px-4 py-2 text-left transition hover:bg-slate-50 ${
+      danger ? "text-red-600 hover:bg-red-50" : "text-slate-700"
+    }`}
+  >
+    {children}
+  </button>
+);
 
 const ChatPage = () => {
   const [searchParams] = useSearchParams();
+  const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [chats, setChats] = useState([]);
   const [activeChat, setActiveChat] = useState(null);
   const [messages, setMessages] = useState([]);
   const [text, setText] = useState("");
   const [loading, setLoading] = useState(true);
   const [typingUser, setTypingUser] = useState(null);
+  const [openMessageMenuId, setOpenMessageMenuId] = useState(null);
+  const [isChatMenuOpen, setIsChatMenuOpen] = useState(false);
+  const activeChatRef = useRef(null);
   const typingTimeoutRef = useRef(null);
   const isTypingRef = useRef(false);
+  const messagesEndRef = useRef(null);
   const { user } = useContext(AuthContext);
 
-  // 📥 Load all chats
+  useEffect(() => {
+    activeChatRef.current = activeChat;
+  }, [activeChat]);
+
   const fetchChats = async () => {
     try {
       const data = await getChats();
       setChats(data.chats);
+      data.chats.forEach((chat) => {
+        socket.emit("joinChat", chat._id);
+      });
     } catch (err) {
       console.log(err);
     } finally {
@@ -29,11 +89,11 @@ const ChatPage = () => {
     }
   };
 
-  // 📥 Load messages for selected chat
   const fetchMessages = async (chatId) => {
     try {
       const data = await getMessages(chatId);
       setMessages(data.messages);
+      socket.emit("markMessagesAsSeen", { chatId, userId: user._id });
     } catch (err) {
       console.log(err);
     }
@@ -44,11 +104,13 @@ const ChatPage = () => {
   }, []);
 
   useEffect(() => {
-    const chatId = searchParams.get("chatId");
+    const chatIdFromURL = searchParams.get("chatId");
     if (chats.length === 0) return;
 
-    if (chatId) {
-      const chatToOpen = chats.find((chat) => chat._id === chatId);
+    if (chatIdFromURL) {
+      if (activeChat?._id === chatIdFromURL) return;
+
+      const chatToOpen = chats.find((chat) => chat._id === chatIdFromURL);
       if (chatToOpen) {
         openChat(chatToOpen);
       }
@@ -58,16 +120,38 @@ const ChatPage = () => {
     if (!activeChat && chats.length > 0) {
       openChat(chats[0]);
     }
-  }, [chats, searchParams, activeChat]);
+  }, [chats.length, searchParams.get("chatId"), activeChat?._id]);
 
-  // 🔌 Socket setup
   useEffect(() => {
     if (!socket.connected) {
       socket.connect();
     }
 
-    const handleReceiveMessage = (msg) => {
-      setMessages((prev) => [...prev, msg]);
+    const handleReceiveMessage = (newMessage) => {
+      const senderId = newMessage.sender?._id || newMessage.sender;
+      const currentUserId = user?._id?.toString() || user?.id?.toString();
+      const isMine = senderId?.toString() === currentUserId;
+      const isChatOpen = activeChatRef.current?._id === newMessage.chat;
+
+      if (isChatOpen) {
+        setMessages((prev) => (prev.find((m) => m._id === newMessage._id) ? prev : [...prev, newMessage]));
+      }
+
+      setChats((prevChats) =>
+        prevChats.map((chat) =>
+          chat._id === newMessage.chat
+            ? {
+                ...chat,
+                lastMessage: newMessage.text,
+                unreadCount: !isMine && !isChatOpen ? (chat.unreadCount || 0) + 1 : chat.unreadCount || 0,
+              }
+            : chat
+        )
+      );
+    };
+
+    const handleMessageStatusUpdate = ({ messageId, status, readBy }) => {
+      setMessages((prev) => prev.map((msg) => (msg._id === messageId ? { ...msg, status, readBy } : msg)));
     };
 
     const handleTyping = ({ senderId, name }) => {
@@ -82,24 +166,57 @@ const ChatPage = () => {
       }
     };
 
+    const handleMessageDeletedForEveryone = ({ messageId }) => {
+      setMessages((prev) =>
+        prev.map((msg) => (msg._id === messageId ? { ...msg, isDeletedForEveryone: true, text: "[Message deleted]" } : msg))
+      );
+    };
+
+    const handleChatDeleted = ({ chatId }) => {
+      setChats((prev) => prev.filter((chat) => chat._id !== chatId));
+
+      if (activeChat?._id === chatId) {
+        setActiveChat(null);
+        setMessages([]);
+      }
+    };
+
+    const handleChatUpdated = ({ chatId, lastMessage }) => {
+      setChats((prevChats) => prevChats.map((chat) => (chat._id === chatId ? { ...chat, lastMessage } : chat)));
+    };
+
     socket.on("receiveMessage", handleReceiveMessage);
+    socket.on("messageStatusUpdate", handleMessageStatusUpdate);
     socket.on("typing", handleTyping);
     socket.on("stopTyping", handleStopTyping);
+    socket.on("messageDeletedForEveryone", handleMessageDeletedForEveryone);
+    socket.on("chatDeleted", handleChatDeleted);
+    socket.on("chatUpdated", handleChatUpdated);
 
     return () => {
       socket.off("receiveMessage", handleReceiveMessage);
+      socket.off("messageStatusUpdate", handleMessageStatusUpdate);
       socket.off("typing", handleTyping);
       socket.off("stopTyping", handleStopTyping);
+      socket.off("messageDeletedForEveryone", handleMessageDeletedForEveryone);
+      socket.off("chatDeleted", handleChatDeleted);
+      socket.off("chatUpdated", handleChatUpdated);
     };
-  }, [user?._id]);
+  }, [user?._id, activeChat?._id]);
 
-  // 💬 Select chat
-  const openChat = (chat) => {
+  useEffect(() => {
+    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+  }, [messages]);
+
+  function openChat(chat) {
     setActiveChat(chat);
     setTypingUser(null);
+    setIsChatMenuOpen(false);
     fetchMessages(chat._id);
     socket.emit("joinChat", chat._id);
-  };
+
+    setChats((prevChats) => prevChats.map((c) => (c._id === chat._id ? { ...c, unreadCount: 0 } : c)));
+  }
 
   const stopTyping = () => {
     if (activeChat && user && isTypingRef.current) {
@@ -134,111 +251,287 @@ const ChatPage = () => {
     }, 1000);
   };
 
-  // 📤 Send message
   const sendMessage = async () => {
     if (!text.trim() || !activeChat || !user) return;
 
     stopTyping();
 
-    const messageData = {
-      chatId: activeChat._id,
-      senderId: user._id,
-      text,
-    };
-
     try {
-      socket.emit("sendMessage", messageData);
+      socket.emit("sendMessage", {
+        chatId: activeChat._id,
+        senderId: user._id,
+        text,
+      });
       setText("");
     } catch (err) {
       console.log(err);
     }
   };
 
-  if (loading) return <Loader />;
+  const handleDeleteMessage = async (messageId, deleteType) => {
+    try {
+      if (deleteType === "forEveryone" && !window.confirm("Delete this message for everyone?")) return;
+
+      await deleteMessage(messageId, deleteType);
+      setOpenMessageMenuId(null);
+
+      if (deleteType === "forEveryone") {
+        socket.emit("deleteMessage", { chatId: activeChat._id, messageId, deleteType, userId: user._id });
+      }
+
+      setMessages((prev) =>
+        prev.map((msg) =>
+          msg._id === messageId
+            ? deleteType === "forEveryone"
+              ? { ...msg, isDeletedForEveryone: true, text: "[Message deleted]" }
+              : { ...msg, deletedFor: [...(msg.deletedFor || []), user._id] }
+            : msg
+        )
+      );
+
+      if (deleteType === "forMe") {
+        setMessages((prev) => prev.filter((msg) => msg._id !== messageId));
+      }
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to delete message");
+    }
+  };
+
+  const handleDeleteChat = async () => {
+    try {
+      if (!activeChat?._id) return;
+      if (!window.confirm("Delete this entire chat? This action cannot be undone.")) return;
+
+      await deleteChat(activeChat._id);
+      socket.emit("deleteChat", { chatId: activeChat._id });
+      setChats((prev) => prev.filter((c) => c._id !== activeChat._id));
+      setActiveChat(null);
+      setMessages([]);
+      setIsChatMenuOpen(false);
+    } catch (err) {
+      console.error(err);
+      toast.error("Failed to delete chat");
+    }
+  };
+
+  const partner = activeChat?.participants?.find((participant) => participant._id !== user?._id);
+
+  if (loading) return <ChatSkeleton />;
 
   return (
-    <div className="flex h-screen">
-      
-      {/* LEFT - Chat list */}
-      <div className="w-1/3 border-r p-3 overflow-y-auto">
-        <h2 className="text-xl font-bold mb-3">Chats</h2>
+    <div className="grid h-[calc(100vh-150px)] min-h-155 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-md lg:grid-cols-[360px_1fr]">
+      <aside className="flex min-h-0 flex-col border-b border-slate-200 bg-white lg:border-b-0 lg:border-r">
+        <div className="border-b border-slate-100 p-5">
+          <p className="text-sm font-semibold uppercase tracking-widest text-slate-500">Inbox</p>
+          <h2 className="mt-1 text-2xl font-black text-slate-900">Messages</h2>
+        </div>
 
-        {chats.map((chat) => (
-          <div
-            key={chat._id}
-            onClick={() => openChat(chat)}
-            className={`p-3 mb-2 cursor-pointer rounded-lg ${
-              activeChat?._id === chat._id
-                ? "bg-blue-500 text-white"
-                : "bg-gray-100"
-            }`}
-          >
-            <p className="font-semibold">
-              {chat.product?.title || "Chat"}
-            </p>
-            <p className="text-sm truncate">{chat.lastMessage}</p>
-          </div>
-        ))}
-      </div>
+        <div className="min-h-0 flex-1 overflow-y-auto p-3">
+          {chats.length === 0 && (
+            <div className="rounded-2xl border border-dashed border-slate-300 p-8 text-center text-sm text-slate-500">
+              No chats yet. Open a listing to start a conversation.
+            </div>
+          )}
 
-      {/* RIGHT - Messages */}
-      <div className="w-2/3 flex flex-col">
-        
-        {/* Messages */}
-        <div className="flex-1 p-4 overflow-y-auto">
-          {messages.map((msg, i) => {
-            const senderId = msg.sender?._id || msg.sender;
-            const isMine = senderId?.toString() === user?._id?.toString();
-            const senderName = typeof msg.sender === "object"
-              ? msg.sender?.name
-              : "Seller";
+          {chats.map((chat) => {
+            const isActive = activeChat?._id === chat._id;
 
             return (
-              <div
-                key={msg._id || i}
-                className={`mb-3 p-3 rounded-2xl max-w-xl shadow-sm ${
-                  isMine
-                    ? "bg-blue-500 text-white ml-auto"
-                    : "bg-gray-100 text-gray-900"
+              <button
+                type="button"
+                key={chat._id}
+                onClick={() => openChat(chat)}
+                className={`mb-2 flex w-full items-center gap-3 rounded-xl p-3 text-left transition ${
+                  isActive ? "bg-blue-600 text-white shadow-lg shadow-blue-100" : "hover:bg-slate-50"
                 }`}
               >
-                {!isMine && (
-                  <p className="text-xs font-semibold text-gray-500 mb-1">
-                    {senderName}
-                  </p>
+                <img
+                  src={chat.product?.images?.[0] || "/default-product.png"}
+                  alt={chat.product?.title || "Product"}
+                  className="h-12 w-12 rounded-xl border border-white/70 object-cover shadow-sm"
+                />
+                <span className="min-w-0 flex-1">
+                  <span className="block truncate text-sm font-bold">{chat.product?.title || "Chat"}</span>
+                  <span className={`mt-1 block truncate text-xs ${isActive ? "text-blue-100" : "text-slate-500"}`}>
+                    {chat.lastMessage || "No messages yet."}
+                  </span>
+                </span>
+                {chat.unreadCount > 0 && (
+                  <span className="grid h-6 min-w-6 place-items-center rounded-full bg-red-500 px-2 text-xs font-bold text-white">
+                    {chat.unreadCount}
+                  </span>
                 )}
-                <p className="whitespace-pre-line">{msg.text}</p>
-              </div>
+              </button>
             );
           })}
         </div>
+      </aside>
 
-        {/* Typing status */}
-        {typingUser && (
-          <div className="px-4 pb-2 text-sm text-gray-500">
-            {typingUser} is typing...
-          </div>
-        )}
+      <section className="flex min-h-0 flex-col bg-slate-50">
+        <header className="flex items-center justify-between gap-4 border-b border-slate-200 bg-white px-5 py-4">
+          {activeChat ? (
+            <div className="flex min-w-0 items-center gap-3">
+              <img
+                src={activeChat.product?.images?.[0] || "/default-product.png"}
+                alt={activeChat.product?.title || "Product"}
+                className="h-12 w-12 rounded-xl object-cover shadow-sm"
+              />
+              <div className="min-w-0">
+                <h2 className="truncate text-base font-black text-slate-900">{activeChat.product?.title || "Chat"}</h2>
+                <p className="truncate text-xs font-semibold text-blue-600">
+                  {partner?.name ? `Chatting with ${partner.name}` : "Campus marketplace conversation"}
+                  {activeChat.product?.price ? ` - INR ${activeChat.product.price}` : ""}
+                </p>
+              </div>
+            </div>
+          ) : (
+            <div>
+              <h2 className="font-black text-slate-900">Select a conversation</h2>
+              <p className="text-sm text-slate-500">Your messages will appear here.</p>
+            </div>
+          )}
 
-        {/* Input */}
+          {activeChat && (
+            <div className="relative">
+              <button
+                type="button"
+                onClick={() => setIsChatMenuOpen((value) => !value)}
+                className="grid h-10 w-10 place-items-center rounded-xl border border-slate-200 text-xl font-bold text-slate-600 transition hover:bg-slate-100"
+                aria-label="Chat actions"
+              >
+                ⋮
+              </button>
+              {isChatMenuOpen && (
+                <ActionMenu>
+                  <MenuButton danger onClick={handleDeleteChat}>
+                    Delete chat
+                  </MenuButton>
+                  <MenuButton
+                    onClick={() => {
+                      toast.success("User blocked locally for this session");
+                      setIsChatMenuOpen(false);
+                    }}
+                  >
+                    Block user
+                  </MenuButton>
+                  <MenuButton
+                    onClick={() => {
+                      setIsReportModalOpen(true);
+                      setIsChatMenuOpen(false);
+                    }}
+                  >
+                    Report user
+                  </MenuButton>
+                </ActionMenu>
+              )}
+            </div>
+          )}
+        </header>
+
         {activeChat && (
-          <div className="p-3 border-t flex gap-2">
-            <input
-              value={text}
-              onChange={(e) => handleInputChange(e.target.value)}
-              className="flex-1 border p-2 rounded"
-              placeholder="Type message..."
-            />
+          <ReportModal
+            isOpen={isReportModalOpen}
+            onClose={() => setIsReportModalOpen(false)}
+            reportedUser={partner?._id}
+          />
+        )}
 
-            <button
-              onClick={sendMessage}
-              className="bg-blue-500 text-white px-4 rounded"
-            >
-              Send
-            </button>
+        <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+          <div className="space-y-4">
+            {messages.map((msg, i) => {
+              const senderId = msg.sender?._id || msg.sender;
+              const isMine = senderId?.toString() === (user?._id || user?.id)?.toString();
+              const senderName = typeof msg.sender === "object" ? msg.sender?.name : "User";
+              const isDeletedForMe = msg.deletedFor?.includes(user._id);
+              if (isDeletedForMe) return null;
+
+              return (
+                <div key={msg._id || i} className={`group flex ${isMine ? "justify-end" : "justify-start"}`}>
+                  <div
+                    className={`relative max-w-[82%] rounded-2xl px-4 py-3 shadow-sm transition ${
+                      isMine
+                        ? "rounded-br-md bg-blue-600 text-white"
+                        : "rounded-bl-md border border-slate-200 bg-white text-slate-800"
+                    }`}
+                  >
+                    {!isMine && <p className="mb-1 text-xs font-bold text-slate-500">{senderName}</p>}
+                    <p className="whitespace-pre-line pr-6 text-sm leading-6">
+                      {msg.isDeletedForEveryone ? <span className="italic opacity-70">This message was deleted</span> : msg.text}
+                    </p>
+                    <div className={`mt-1 text-right text-[11px] ${isMine ? "text-blue-100" : "text-slate-400"}`}>
+                      {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                      {isMine && !msg.isDeletedForEveryone ? ` - ${msg.status === "seen" ? "Seen" : msg.status === "delivered" ? "Delivered" : "Sent"}` : ""}
+                    </div>
+
+                    {!msg.isDeletedForEveryone && (
+                      <div className={`absolute top-2 ${isMine ? "right-2" : "right-2"}`}>
+                        <button
+                          type="button"
+                          onClick={() => setOpenMessageMenuId(openMessageMenuId === msg._id ? null : msg._id)}
+                          className={`grid h-7 w-7 place-items-center rounded-full text-base opacity-0 transition group-hover:opacity-100 ${
+                            isMine ? "text-white hover:bg-blue-700" : "text-slate-500 hover:bg-slate-100"
+                          }`}
+                          aria-label="Message actions"
+                        >
+                          ⋮
+                        </button>
+                        {openMessageMenuId === msg._id && (
+                          <ActionMenu align={isMine ? "right" : "left"}>
+                            <MenuButton danger onClick={() => handleDeleteMessage(msg._id, "forMe")}>
+                              Delete for me
+                            </MenuButton>
+                            {isMine && (
+                              <MenuButton danger onClick={() => handleDeleteMessage(msg._id, "forEveryone")}>
+                                Delete for everyone
+                              </MenuButton>
+                            )}
+                            <MenuButton
+                              onClick={() => {
+                                setIsReportModalOpen(true);
+                                setOpenMessageMenuId(null);
+                              }}
+                            >
+                              Report
+                            </MenuButton>
+                          </ActionMenu>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+            <div ref={messagesEndRef} />
+          </div>
+        </div>
+
+        {typingUser && <div className="px-5 pb-2 text-sm font-medium text-slate-500">{typingUser} is typing...</div>}
+
+        {activeChat && user && (
+          <div className="border-t border-slate-200 bg-white p-4">
+            <div className="flex gap-3">
+              <input
+                value={text}
+                onChange={(e) => handleInputChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") sendMessage();
+                }}
+                className="min-w-0 flex-1 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3 text-sm text-black outline-none transition focus:border-blue-500 focus:bg-white focus:ring-4 focus:ring-blue-100"
+                placeholder="Type a message..."
+              />
+              <button
+                type="button"
+                onClick={sendMessage}
+                className="rounded-xl bg-blue-600 px-5 py-3 text-sm font-bold text-white shadow-md shadow-blue-100 transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50"
+                disabled={!text.trim()}
+              >
+                Send
+              </button>
+            </div>
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 };

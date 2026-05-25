@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import API from "../../services/api";
 import Loader from "../../components/Loader";
 import {
   getReports,
   updateReportStatus,
   banUser,
 } from "../../services/reportService";
+import { deleteProduct } from "../../services/productService";
+import { toast } from "react-hot-toast";
 
 const Reports = () => {
   const [reports, setReports] = useState([]);
@@ -14,10 +15,10 @@ const Reports = () => {
   // 📥 Fetch reports
   const fetchReports = async () => {
     try {
-      const { data } = await API.get("/reports");
+      const data = await getReports();
       setReports(data.reports);
     } catch (err) {
-      alert(err.response?.data?.message || "Error fetching reports");
+      toast.error(err.response?.data?.message || "Error fetching reports");
     } finally {
       setLoading(false);
     }
@@ -28,30 +29,39 @@ const Reports = () => {
   }, []);
 
   // 🔄 Update report status
-  const updateStatus = async (id, status) => {
+  const handleResolve = async (id) => {
     try {
-      await API.put(`/reports/${id}`, { status });
-      alert("Status updated");
+      await updateReportStatus(id, "resolved");
+      toast.success("Report resolved ✅");
       fetchReports();
     } catch (err) {
-      alert("Failed to update status");
+      toast.error("Failed to update status");
     }
   };
 
   // 🔨 Ban user
-  const banUser = async (userId) => {
+  const handleBanUser = async (userId) => {
     try {
-      await API.put(`/reports/ban/${userId}`);
-      alert("User banned successfully");
+      const data = await banUser(userId);
+      toast.success(data.message);
+      fetchReports();
     } catch (err) {
-      alert("Failed to ban user");
+      toast.error("Failed to ban user");
     }
   };
 
-  const loadReports = async () => {
-  const data = await getReports();
-  setReports(data.reports);
-};
+  // ❌ Delete product
+  const handleDeleteProduct = async (productId) => {
+    if (!window.confirm("Are you sure you want to delete this product? This action cannot be undone.")) return;
+    try {
+      await deleteProduct(productId);
+      toast.success("Product deleted successfully ✅");
+      fetchReports(); // Refresh list to show updated target status
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.message || "Failed to delete product");
+    }
+  };
 
   if (loading) return <Loader />;
 
@@ -60,7 +70,9 @@ const Reports = () => {
       <h1 className="text-2xl font-bold mb-4">Reports</h1>
 
       {reports.length === 0 ? (
-        <p>No reports found</p>
+        <div className="text-center py-20 bg-white rounded-xl border border-dashed">
+          <p className="text-gray-500">No reports found.</p>
+        </div>
       ) : (
         <div className="space-y-4">
           {reports.map((report) => (
@@ -68,21 +80,17 @@ const Reports = () => {
               key={report._id}
               className="bg-white p-4 rounded-lg shadow"
             >
+              <p className="text-xs font-bold text-blue-600 uppercase mb-1">{report.targetType} Report</p>
               <p><strong>Reason:</strong> {report.reason}</p>
-
               <p>
-                <strong>Reported User:</strong>{" "}
-                {report.reportedUser?.name} ({report.reportedUser?.email})
+                <strong>Target:</strong>{" "}
+                {report.targetType === "Product" 
+                  ? (report.targetId?.title || "Deleted Product") 
+                  : (report.targetId?.name || "Deleted User")}
               </p>
-
               <p>
                 <strong>Reported By:</strong>{" "}
-                {report.reportedBy?.name}
-              </p>
-
-              <p>
-                <strong>Product:</strong>{" "}
-                {report.product?.title || "N/A"}
+                {report.reporter?.name}
               </p>
 
               <p>
@@ -102,22 +110,29 @@ const Reports = () => {
               <div className="mt-3 flex gap-3">
                 
                 <button
-                  onClick={() =>
-                    updateStatus(report._id, "reviewed")
-                  }
+                  onClick={() => handleResolve(report._id)}
                   className="bg-green-500 text-white px-3 py-1 rounded"
                 >
-                  Mark Reviewed
+                  Resolve
                 </button>
 
-                <button
-                  onClick={() =>
-                    banUser(report.reportedUser._id)
-                  }
-                  className="bg-red-500 text-white px-3 py-1 rounded"
-                >
-                  Ban User
-                </button>
+                {report.targetType === "Product" && report.targetId && (
+                  <button
+                    onClick={() => handleDeleteProduct(report.targetId._id || report.targetId)}
+                    className="bg-red-600 text-white px-3 py-1 rounded hover:bg-red-700"
+                  >
+                    Delete Product
+                  </button>
+                )}
+
+                {report.targetType === "User" && (
+                  <button
+                    onClick={() => handleBanUser(report.targetId?._id || report.targetId)}
+                    className="bg-red-500 text-white px-3 py-1 rounded"
+                  >
+                    Ban/Unban User
+                  </button>
+                )}
 
               </div>
             </div>

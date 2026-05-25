@@ -9,7 +9,7 @@ const Users = () => {
   // 📥 Fetch all users
   const fetchUsers = async () => {
     try {
-      const { data } = await API.get("/auth/users"); // make sure backend route exists
+      const { data } = await API.get("/users/admin/all");
       setUsers(data.users);
     } catch (err) {
       alert(err.response?.data?.message || "Error fetching users");
@@ -23,18 +23,13 @@ const Users = () => {
   }, []);
 
   // 🔨 Ban / Unban User
-  const toggleBan = async (userId, isBanned) => {
+  const toggleBan = async (userId) => {
     try {
-      if (isBanned) {
-        await API.put(`/auth/unban/${userId}`);
-        alert("User unbanned");
-      } else {
-        await API.put(`/reports/ban/${userId}`);
-        alert("User banned");
-      }
+      const { data } = await API.put(`/users/admin/ban/${userId}`);
+      alert(data.message);
       fetchUsers();
     } catch (err) {
-      alert("Action failed");
+      alert(err.response?.data?.message || "Action failed");
     }
   };
 
@@ -42,8 +37,7 @@ const Users = () => {
 
   return (
     <div className="p-6">
-      <h1 className="text-2xl font-bold mb-4">Users</h1>
-
+      <h1 className="text-2xl font-bold mb-4">Manage Users</h1>
       {users.length === 0 ? (
         <p>No users found</p>
       ) : (
@@ -69,7 +63,7 @@ const Users = () => {
 
               {/* Actions */}
               <button
-                onClick={() => toggleBan(user._id, user.isBanned)}
+                onClick={() => toggleBan(user._id)}
                 className={`px-4 py-1 rounded text-white ${
                   user.isBanned
                     ? "bg-green-500 hover:bg-green-600"

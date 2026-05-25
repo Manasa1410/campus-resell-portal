@@ -1,46 +1,33 @@
-// utils/validators.js
+export const EMAIL_REGEX =
+  /^[a-zA-Z0-9.!#$%&'*+/=?^_`{|}~-]+@(?:[a-zA-Z0-9](?:[a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-z]{2,}(?:\.[a-z]{2,})*$/i;
 
-//
-// 📧 Validate Email
-//
-export const validateEmail = (email) => {
-  const regex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-  return regex.test(email);
-};
+export const validateEmail = (email) => EMAIL_REGEX.test(String(email || "").trim());
 
-//
-// 🔐 Validate Password
-//
-export const validatePassword = (password) => {
-  // Minimum 6 characters
-  return password && password.length >= 6;
-};
+export const validatePassword = (password) => password && password.length >= 6;
 
-//
-// 📝 Validate Register Input
-//
 export const validateRegisterInput = ({ name, email, password }) => {
   if (!name || !email || !password) {
     return "All fields are required";
   }
 
   if (!validateEmail(email)) {
-    return "Use a valid college email (.edu or .ac.in)";
+    return "Use a valid email address, including public or institutional domains such as .edu, .in, .edu.in, .ac.in, or .res.in";
   }
 
   if (!validatePassword(password)) {
     return "Password must be at least 6 characters";
   }
 
-  return null; // ✅ valid
+  return null;
 };
 
-//
-// 🔑 Validate Login Input
-//
 export const validateLoginInput = ({ email, password }) => {
   if (!email || !password) {
     return "Email and password are required";
+  }
+
+  if (!validateEmail(email)) {
+    return "Use a valid email address";
   }
 
   return null;

@@ -2,41 +2,35 @@ import mongoose from "mongoose";
 
 const reportSchema = new mongoose.Schema(
   {
-    reportedUser: {
-      type: mongoose.Schema.Types.ObjectId,
-      ref: "User",
-      required: true,
-      index: true,
-    },
-
-    reportedBy: {
+    reporter: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "User",
       required: true,
     },
-
-    product: {
+    targetId: {
       type: mongoose.Schema.Types.ObjectId,
-      ref: "Product",
-      default: null,
+      required: true,
+      refPath: 'targetType',
     },
-
+    targetType: {
+      type: String,
+      enum: ["Product", "User"],
+      required: true,
+    },
     reason: {
       type: String,
       required: true,
-      trim: true,
     },
-
+    description: {
+      type: String,
+    },
     status: {
       type: String,
-      enum: ["pending", "reviewed", "resolved"],
+      enum: ["pending", "resolved"],
       default: "pending",
     },
-
-    // ⭐ Admin action note
     adminNote: {
       type: String,
-      default: "",
     },
   },
   { timestamps: true }

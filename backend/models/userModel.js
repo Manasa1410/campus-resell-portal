@@ -1,4 +1,5 @@
 import mongoose from "mongoose";
+import { EMAIL_REGEX } from "../utils/validators.js";
 
 const userSchema = new mongoose.Schema(
   {
@@ -14,7 +15,7 @@ const userSchema = new mongoose.Schema(
       unique: true,
       lowercase: true,
       trim: true,
-      match: [/@.+\.(edu|ac\.in)$/, "Use a valid college email"],
+      match: [EMAIL_REGEX, "Use a valid public or institutional email"],
       index: true,
     },
 
@@ -45,13 +46,34 @@ const userSchema = new mongoose.Schema(
       default: "user",
     },
 
+    wishlist: [
+      {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: "Product",
+      },
+    ],
+
     // ⭐ Optional but useful
     lastLogin: {
       type: Date,
       default: null,
     },
+
+    resetPasswordToken: {
+       type: String,
+    },
+
+    resetPasswordExpire: {
+        type: Date,
+    },
   },
   { timestamps: true }
 );
+
+// Virtual property for isAdmin based on role
+userSchema.virtual('isAdmin').get(function() {
+  return this.role === 'admin';
+});
+
 
 export default mongoose.model("User", userSchema);

@@ -1,8 +1,13 @@
 import API from "./api";
 
 // 🔐 Register user
-export const registerUser = async (userData) => {
-  const { data } = await API.post("/auth/register", userData);
+export const registerUser = async (formData) => {
+  const { data } = await API.post("/auth/register", formData, {
+    headers: {
+      "Content-Type": "multipart/form-data",
+    },
+  });
+
   return data;
 };
 

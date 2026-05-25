@@ -1,16 +1,101 @@
-# React + Vite
+# Campus Resell Portal Frontend
 
-This template provides a minimal setup to get React working in Vite with HMR and some ESLint rules.
+Modern React frontend for the Campus Resell marketplace. The interface is built as a production-style SaaS dashboard with a responsive sidebar shell, dark mode, reusable UI primitives, skeleton loading states, and toast-driven feedback.
 
-Currently, two official plugins are available:
+## Core Tech Stack
 
-- [@vitejs/plugin-react](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react) uses [Oxc](https://oxc.rs)
-- [@vitejs/plugin-react-swc](https://github.com/vitejs/vite-plugin-react/blob/main/packages/plugin-react-swc) uses [SWC](https://swc.rs/)
+| Concern | Implementation |
+| --- | --- |
+| Framework | React 19 with Vite |
+| Routing | React Router DOM |
+| Styling | Tailwind CSS 4 with utility-first components |
+| State | React Context for auth, local component state for forms/views |
+| API | Axios service layer |
+| Realtime | Socket.IO Client |
+| Feedback | React Hot Toast |
 
-## React Compiler
+## State Management
 
-The React Compiler is not enabled on this template because of its impact on dev & build performances. To add it, see [this documentation](https://react.dev/learn/react-compiler/installation).
+- `AuthContext` loads the active user from the JWT token and exposes `user`, `setUser`, `login`, `logout`, and `loading`.
+- Page-level state handles filters, forms, selected chat, message actions, image previews, and loading states.
+- Theme mode is managed by `AppLayout`, persisted in `localStorage`, and applied through the root `dark` class.
 
-## Expanding the ESLint configuration
+## Folder Structure
 
-If you are developing a production application, we recommend using TypeScript with type-aware lint rules enabled. Check out the [TS template](https://github.com/vitejs/vite/tree/main/packages/create-vite/template-react-ts) for information on how to integrate TypeScript and [`typescript-eslint`](https://typescript-eslint.io) in your project.
+```text
+src/
+  assets/                  Static images and Vite assets
+  components/
+    ui/                    Reusable Button, Card, Badge, Modal, Dropdown, Skeleton, EmptyState, Icon
+    AppLayout.jsx          Global shell with sidebar, header, theme toggle
+    Sidebar.jsx            Collapsible navigation drawer
+    ProductCard.jsx        Marketplace listing card
+    NotificationDropdown.jsx
+    ProtectedRoute.jsx
+    Loader.jsx
+  context/
+    AuthContext.jsx        Global authentication state
+  hooks/
+    useAuth.js             Auth context hook
+  pages/
+    Auth/                  Login, register, forgot/reset password
+    Products/              Home, details, add/edit, wishlist, my products
+    Chat/                  Messaging UI
+    Profile/               Account and profile management
+    Admin/                 Reports, users, dashboard
+  services/                Axios API functions and feature services
+  sockets/                 Socket.IO client setup
+  utils/                   Shared formatting and validation helpers
+```
+
+## Installation
+
+```bash
+npm install
+```
+
+## Environment Setup
+
+Create `frontend/.env` when deploying to a non-local API. The current service layer defaults to the local backend, but a deployment can expose:
+
+```env
+VITE_API_URL=http://localhost:5001/api
+VITE_SOCKET_URL=http://localhost:5001
+```
+
+If you introduce these variables, wire them through `src/services/api.js` and `src/sockets/socket.js`.
+
+## Development
+
+```bash
+npm run dev
+```
+
+Open `http://localhost:5173`.
+
+## Build
+
+```bash
+npm run build
+```
+
+The production bundle is emitted to `dist/`.
+
+## Preview Production Build
+
+```bash
+npm run preview
+```
+
+## Quality Checks
+
+```bash
+npm run lint
+```
+
+## Deployment Notes
+
+- Run `npm run build` before deployment.
+- Configure the backend URL for the target environment.
+- Ensure uploaded media URLs are served from the backend or a CDN/object store.
+- Keep the `dark` class strategy enabled for predictable theme rendering.

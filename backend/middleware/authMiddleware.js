@@ -1,5 +1,6 @@
 import jwt from "jsonwebtoken";
 import User from "../models/userModel.js";
+import { upload } from "../middleware/upload.js";
 
 //
 // 🔐 Protect Middleware
@@ -36,6 +37,18 @@ export const protect = async (req, res, next) => {
     return res.status(401).json({
       success: false,
       message: "Invalid or expired token",
+    });
+  }
+};
+
+// 👑 Admin middleware
+export const adminOnly = (req, res, next) => {
+  if (req.user && req.user.isAdmin) {
+    next();
+  } else {
+    res.status(403).json({
+      success: false,
+      message: "Admin access only",
     });
   }
 };

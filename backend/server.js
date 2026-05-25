@@ -10,13 +10,12 @@ import authRoutes from "./routes/authRoutes.js";
 import productRoutes from "./routes/productRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
+import notificationRoutes from "./routes/notificationRoutes.js";
 
+import path from "path";
 
+import userRoutes from "./routes/userRoutes.js";
 
-//
-// 🧩 Middleware
-//
-app.use(express.json());
 
 //
 // 🔗 Routes
@@ -25,6 +24,12 @@ app.use("/api/auth", authRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/chats", chatRoutes);
 app.use("/api/reports", reportRoutes);
+app.use("/api/notifications", notificationRoutes);
+
+app.use("/uploads", express.static(path.join("uploads")));
+
+app.use("/api/users", userRoutes);
+
 
 //
 // 🗄️ Connect DB
@@ -44,7 +49,7 @@ initSocket(server);
 //
 // 🚀 Start Server
 //
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 
 server.listen(PORT, () => {
   console.log(`🚀 Server started on port ${PORT}`);

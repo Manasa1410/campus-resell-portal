@@ -1,1 +1,115 @@
 @import "tailwindcss";
+
+@theme {
+  --color-primary-bg: var(--primary-bg);
+  --color-bg-gradient: var(--bg-gradient);
+  --color-accent-indigo: var(--accent-indigo);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-icon-color: var(--icon-color);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-border: var(--border);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+}
+
+/* ============================= */
+/* 🌞 Light Theme (Default) */
+/* ============================= */
+:root {
+  color-scheme: light;
+
+  --primary-bg: #f8fafc;
+  --bg-gradient: linear-gradient(135deg, #f8fafc 0%, #f1f5f9 100%);
+  --accent-indigo: #6366F1;
+  --text-primary: #0f172a;
+  --text-secondary: #64748b;
+  --icon-color: #6366F1;
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --border: #e2e8f0;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+}
+
+/* ============================= */
+/* 🌙 Dark Theme */
+/* ============================= */
+.dark {
+  color-scheme: dark;
+
+  --primary-bg: #0F172A;
+  --bg-gradient: linear-gradient(135deg, #0F172A 0%, #1E293B 100%);
+  --text-primary: #E2E8F0;
+  --text-secondary: #94A3B8;
+  --icon-color: #A5B4FC;
+  --card: #121214;
+  --card-foreground: #f8fafc;
+  --border: #27272a;
+  --muted: #18181b;
+  --muted-foreground: #a1a1aa;
+}
+
+/* ============================= */
+/* 🌍 Global Styles */
+/* ============================= */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 transparent;
+}
+
+html {
+  background: var(--primary-bg);
+  scroll-behavior: smooth;
+  transition: background-color 0.3s ease;
+}
+
+body {
+  min-width: 320px;
+  min-height: 100vh;
+  font-family: 'Inter', sans-serif;
+  background: var(--bg-gradient);
+  color: var(--text-primary);
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+
+  transition: background-color 0.3s ease, color 0.3s ease;
+}
+
+/* ============================= */
+/* 🎯 Interactive Elements */
+/* ============================= */
+a,
+button,
+input,
+select,
+textarea {
+  transition-property: color, background-color, border-color, box-shadow, transform, opacity;
+  transition-duration: 200ms;
+  transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* ============================= */
+/* ✨ Effects */
+/* ============================= */
+
+/* Glow effect */
+.active-glow {
+  box-shadow: 0 0 20px rgba(99, 102, 241, 0.4);
+}
+
+/* Glassmorphism */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.dark .glass-panel {
+  background: rgba(30, 41, 59, 0.5);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
