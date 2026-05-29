@@ -20,6 +20,11 @@ import path from "path";
 
 import userRoutes from "./routes/userRoutes.js";
 
+//
+// 🗄️ Connect DB
+//
+connectDB();
+
 
 //
 // 🔗 Routes
@@ -39,10 +44,7 @@ app.use("/uploads", express.static(path.join("uploads")));
 app.use("/api/users", userRoutes);
 
 
-//
-// 🗄️ Connect DB
-//
-connectDB();
+
 
 //
 // 🚀 Create HTTP Server
