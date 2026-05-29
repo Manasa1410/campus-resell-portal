@@ -1,5 +1,6 @@
 import { Link, useNavigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
+import { BACKEND_URL } from "../services/api";
 import NotificationDropdown from "./NotificationDropdown";
 
 const Navbar = () => {
@@ -48,7 +49,7 @@ const Navbar = () => {
           <img
             src={
               user?.avatar
-                ? `http://localhost:5001/${user.avatar}`
+                ? `${BACKEND_URL}/${user.avatar}`
                 : "/default-avatar.png"
             }
             alt="avatar"
