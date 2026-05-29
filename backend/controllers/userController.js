@@ -1,5 +1,7 @@
 import User from "../models/userModel.js";
 import Product from "../models/productModel.js";
+import Chat from "../models/chatModel.js";
+import Report from "../models/reportModel.js";
 // import Chat from "../models/chatModel.js"; // Import if chat model is available
 
 // 📊 Get Admin Dashboard Stats
@@ -8,6 +10,8 @@ export const getAdminStats = async (req, res) => {
     const userCount = await User.countDocuments();
     const productCount = await Product.countDocuments();
     const availableProducts = await Product.countDocuments({ status: "available" });
+    const chatCount = await Chat.countDocuments();
+    const reportCount = await Report.countDocuments({ status: { $ne: "resolved" } });
     
     res.json({
       success: true,
@@ -15,7 +19,8 @@ export const getAdminStats = async (req, res) => {
         users: userCount,
         products: productCount,
         available: availableProducts,
-        chats: 0, // Update with actual chat count if model imported
+        chats: chatCount,
+        reports: reportCount,
       },
     });
   } catch (error) {

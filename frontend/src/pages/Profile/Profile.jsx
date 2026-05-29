@@ -10,6 +10,7 @@ import Modal from "../../components/ui/Modal";
 import Icon from "../../components/ui/Icon";
 import SkeletonBlock from "../../components/ui/Skeleton";
 import useAuth from "../../hooks/useAuth";
+import OTPVerification from "../../components/OTPVerification";
 
 const Profile = () => {
   const [loading, setLoading] = useState(true);
@@ -158,8 +159,17 @@ const Profile = () => {
 
           <h2 className="mt-4 text-2xl font-black text-slate-950 dark:text-white">{user.name}</h2>
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{user.email}</p>
-          <div className="mt-3">
+          <div className="mt-3 flex justify-center gap-2 flex-wrap">
             <Badge tone={user.isAdmin ? "purple" : "blue"}>{user.isAdmin ? "Admin" : "Campus member"}</Badge>
+            {user.isVerified ? (
+              <Badge tone="available">✓ Verified Member</Badge>
+            ) : (
+              <Badge tone="red">Unverified Email</Badge>
+            )}
+          </div>
+
+          <div className="mt-4 flex justify-center gap-2">
+            <Badge tone="purple">{Number(user.averageRating || 0).toFixed(1)} rating</Badge>
           </div>
 
           {file && (
@@ -250,6 +260,15 @@ const Profile = () => {
               </Button>
             </div>
           </Card>
+
+          {!user.isVerified && (
+            <OTPVerification
+              user={user}
+              onVerificationSuccess={(updatedUser) => {
+                setUser((prev) => ({ ...prev, ...updatedUser }));
+              }}
+            />
+          )}
 
           <div className="grid gap-4 sm:grid-cols-2">
             <Card as={Link} to="/my-products" hover className="p-6">

@@ -13,6 +13,8 @@ const AddProduct = () => {
     description: "",
     price: "",
     category: "Books",
+    condition: "used",
+    location: "",
   });
 
   const [isDragging, setIsDragging] = useState(false);
@@ -93,6 +95,8 @@ const AddProduct = () => {
       formData.append("description", form.description);
       formData.append("price", form.price);
       formData.append("category", form.category);
+      formData.append("condition", form.condition);
+      formData.append("location", form.location);
 
       // images
       images.forEach((img) => {
@@ -183,6 +187,32 @@ const AddProduct = () => {
             <option>Cycles</option>
             <option>Others</option>
           </select>
+        </div>
+
+        <div className="mb-6 grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className="ml-1 text-sm font-bold text-text-secondary dark:text-white">Condition</label>
+            <select
+              name="condition"
+              value={form.condition}
+              onChange={handleChange}
+              className="mt-1 w-full rounded-2xl bg-muted/50 p-3 text-text-primary outline-none transition-all focus:bg-card focus:ring-4 focus:ring-accent-indigo/10 dark:text-white"
+            >
+              <option value="new">New</option>
+              <option value="used">Used</option>
+            </select>
+          </div>
+          <div>
+            <label className="ml-1 text-sm font-bold text-text-secondary dark:text-white">Campus Location</label>
+            <input
+              type="text"
+              name="location"
+              placeholder="Hostel, block, or campus"
+              value={form.location}
+              onChange={handleChange}
+              className="mt-1 w-full rounded-2xl bg-muted/50 p-3 text-text-primary outline-none transition-all focus:bg-card focus:ring-4 focus:ring-accent-indigo/10 dark:text-white"
+            />
+          </div>
         </div>
 
         {/* Images */}

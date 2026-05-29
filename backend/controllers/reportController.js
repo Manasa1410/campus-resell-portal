@@ -8,12 +8,12 @@ import Product from "../models/productModel.js";
 //
 export const createReport = async (req, res) => {
   try {
-    const { reportedUser, product, reason, description } = req.body;
+    const { reportedUser, product, message, targetId: rawTargetId, targetType: rawTargetType, reason, description } = req.body;
     const reporterId = req.user.id;
     
     // Map to polymorphic fields used in backend/models/reportModel.js
-    const targetId = reportedUser || product;
-    const targetType = reportedUser ? "User" : "Product";
+    const targetId = rawTargetId || reportedUser || product || message;
+    const targetType = rawTargetType || (reportedUser ? "User" : message ? "Message" : "Product");
 
     // 1. Validations
     if (!targetId) {
@@ -27,6 +27,7 @@ export const createReport = async (req, res) => {
     // 2. Prevent Duplicate Reports
     const existingReport = await Report.findOne({
       reporter: reporterId,
+      reportedBy: reporterId,
       targetId,
       targetType,
     });
@@ -173,5 +174,33 @@ export const unbanUser = async (req, res) => {
     res.json({ success: true, message: "User unbanned" });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+//
+// 🗑️ Delete Report (Admin)
+//
+export const deleteReport = async (req, res) => {
+  try {
+    const { id } = req.params;
+    
+    const report = await Report.findByIdAndDelete(id);
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        message: "Report not found",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "Report record deleted successfully",
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: error.message,
+    });
   }
 };

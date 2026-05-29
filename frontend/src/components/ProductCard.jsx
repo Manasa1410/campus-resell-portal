@@ -14,16 +14,17 @@ const ProductCard = ({ product, onRemoveFromWishlist, onWishlistToggle }) => {
   const statusTone = product.status === "available" ? "available" : "sold";
 
   return (
-    <Card className="group overflow-hidden glass-panel rounded-3xl transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_30px_60px_rgba(0,0,0,0.15)]">
+    <Card className="group overflow-hidden rounded-3xl glass-panel transition-all duration-500 hover:-translate-y-2 hover:shadow-[0_30px_60px_rgba(0,0,0,0.15)]">
       <div className="relative overflow-hidden bg-slate-800">
         <img
           src={getImageSrc(product.images?.[0])}
           alt={product.title}
-          className="h-52 w-full object-cover transition duration-300 group-hover:scale-105 "
+          className="h-52 w-full object-cover transition duration-300 group-hover:scale-105"
         />
 
-        <div className="absolute left-3 top-3">
+        <div className="absolute left-3 top-3 flex flex-wrap gap-2">
           <Badge tone={statusTone}>{product.status || "available"}</Badge>
+          {product.isFeatured && <Badge tone="featured">Featured</Badge>}
         </div>
 
         {(onWishlistToggle || onRemoveFromWishlist) && (
@@ -40,27 +41,23 @@ const ProductCard = ({ product, onRemoveFromWishlist, onWishlistToggle }) => {
 
       <div className="space-y-3 p-4">
         <div>
-          <h2 className="truncate text-lg font-bold text-text-primary dark:text-white tracking-tight">{product.title}</h2>
-          <p className="mt-1 text-sm text-text-secondary">{product.category || "Campus item"}</p>
-        </div>
-
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-xl font-black text-accent-indigo dark:text-indigo-400 transition-colors">₹{product.price}</p>
-          <p className="text-xs font-semibold text-text-secondary">
-            {product.rating ? product.rating.toFixed(1) : "0.0"} ({product.numReviews || 0})
+          <h2 className="truncate text-lg font-bold tracking-tight text-text-primary dark:text-white">{product.title}</h2>
+          <p className="mt-1 text-sm text-text-secondary">
+            {product.category || "Campus item"} {product.condition ? `- ${product.condition}` : ""}
           </p>
         </div>
 
-        <Button as={Link} to={`/product/${product._id}`} className="w-full bg-accent-indigo hover:bg-[#4F46E5] text-white rounded-xl py-2.5 font-bold transition-all active:scale-95 shadow-lg shadow-indigo-500/20">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xl font-black text-accent-indigo transition-colors dark:text-indigo-400">INR {product.price}</p>
+          <p className="text-xs font-bold text-text-secondary">{product.views || 0} views</p>
+        </div>
+
+        <Button as={Link} to={`/product/${product._id}`} className="w-full">
           View Details
         </Button>
 
         {onRemoveFromWishlist && (
-          <Button
-            variant="danger"
-            className="w-full mt-2"
-            onClick={() => onRemoveFromWishlist(product._id)}
-          >
+          <Button variant="danger" className="mt-2 w-full" onClick={() => onRemoveFromWishlist(product._id)}>
             Remove
           </Button>
         )}

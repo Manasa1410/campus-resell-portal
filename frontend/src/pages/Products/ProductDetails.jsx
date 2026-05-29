@@ -22,6 +22,9 @@ const ProductDetails = () => {
   const [submittingReview, setSubmittingReview] = useState(false);
   const [rating, setRating] = useState(5);
   const [comment, setComment] = useState("");
+  const [sellerRating, setSellerRating] = useState(5);
+  const [sellerComment, setSellerComment] = useState("");
+  const [sellerReviews, setSellerReviews] = useState([]);
   const [wishlisted, setWishlisted] = useState(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState(false);
   const [sellerIsBanned, setSellerIsBanned] = useState(false);
@@ -40,6 +43,11 @@ const ProductDetails = () => {
       const { data: allData } = await API.get("/products");
       const similar = allData.products.filter((p) => p.category === data.product.category && p._id !== id).slice(0, 4);
       setSimilarProducts(similar);
+
+      if (data.product.seller?._id) {
+        const { data: reviewData } = await API.get(`/seller-reviews/${data.product.seller._id}`);
+        setSellerReviews(reviewData.reviews || []);
+      }
     } catch (err) {
       toast.error(err.response?.data?.message || "Failed to load product");
     } finally {
@@ -91,6 +99,21 @@ const ProductDetails = () => {
     } catch (err) {
       console.error(err);
       toast.error("Error updating wishlist");
+    }
+  };
+
+  const handleSellerReview = async (e) => {
+    e.preventDefault();
+    try {
+      const { data } = await API.post(`/seller-reviews/${product.seller._id}`, {
+        rating: sellerRating,
+        comment: sellerComment,
+      });
+      setSellerReviews((prev) => [data.review, ...prev]);
+      setSellerComment("");
+      toast.success("Seller review added");
+    } catch (err) {
+      toast.error(err.response?.data?.message || "Unable to review seller");
     }
   };
 
@@ -227,6 +250,9 @@ const ProductDetails = () => {
             <p className="rounded-full bg-muted/50 px-4 py-1.5 text-sm font-semibold text-text-secondary">
               Rating {product.rating ? product.rating.toFixed(1) : "0.0"} / 5 ({product.numReviews || 0})
             </p>
+            <p className="rounded-full bg-muted/50 px-4 py-1.5 text-sm font-semibold text-text-secondary">
+              {product.views || 0} views
+            </p>
           </div>
 
           <p className="mt-6 leading-7 text-text-secondary">{product.description}</p>
@@ -234,7 +260,12 @@ const ProductDetails = () => {
           <div className="mt-8 grid gap-4 rounded-2xl bg-muted/30 p-5 sm:grid-cols-2">
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-text-secondary dark:text-white">Seller</p>
-              <p className="mt-1 font-bold text-text-primary dark:text-white">{product.seller?.name || "Unknown"}</p>
+              <p className="mt-1 font-bold text-text-primary dark:text-white">
+                {product.seller?.name || "Unknown"} {product.seller?.isVerified ? "Verified" : ""}
+              </p>
+              <p className="mt-1 text-xs font-semibold text-text-secondary">
+                Seller rating {product.seller?.averageRating || 0}/5 ({product.seller?.totalReviews || 0})
+              </p>
             </div>
             <div>
               <p className="text-xs font-bold uppercase tracking-widest text-text-secondary dark:text-white">Category</p>
@@ -397,6 +428,65 @@ const ProductDetails = () => {
                 <div key={`${review.name}-${index}`} className="rounded-xl border border-border bg-muted/50 p-4">
                   <div className="flex items-center justify-between gap-3">
                     <p className="font-bold text-text-primary dark:text-white">{review.name}</p>
+                    <p className="text-sm font-bold text-amber-600">{review.rating}/5</p>
+                  </div>
+                  <p className="mt-2 text-sm leading-6 text-text-secondary">{review.comment}</p>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      </section>
+
+      <section className="grid gap-6 lg:grid-cols-[0.85fr_1.15fr]">
+        <form onSubmit={handleSellerReview} className="rounded-2xl border border-border glass-panel p-6 shadow-2xl">
+          <p className="text-sm font-bold uppercase tracking-widest text-text-secondary dark:text-white">Seller trust</p>
+          <h2 className="mt-1 text-2xl font-black text-text-primary dark:text-white tracking-tight">Rate the Seller</h2>
+
+          {user && !isOwner ? (
+            <div className="mt-5 space-y-4">
+              <select
+                className="w-full rounded-xl border border-border bg-muted/50 p-3 outline-none focus:border-accent-indigo focus:ring-4 focus:ring-accent-indigo/20 text-text-primary dark:text-white"
+                value={sellerRating}
+                onChange={(e) => setSellerRating(e.target.value)}
+              >
+                <option value="5">5 - Excellent</option>
+                <option value="4">4 - Very Good</option>
+                <option value="3">3 - Good</option>
+                <option value="2">2 - Fair</option>
+                <option value="1">1 - Poor</option>
+              </select>
+              <textarea
+                className="h-28 w-full rounded-xl border border-border bg-muted/50 p-3 outline-none focus:border-accent-indigo focus:ring-4 focus:ring-accent-indigo/20 text-text-primary dark:text-white"
+                placeholder="How was your interaction with this seller?"
+                value={sellerComment}
+                onChange={(e) => setSellerComment(e.target.value)}
+                required
+              />
+              <button type="submit" className="rounded-xl bg-accent-indigo px-5 py-3 text-sm font-bold text-white transition hover:bg-accent-indigo/90">
+                Submit Seller Review
+              </button>
+            </div>
+          ) : (
+            <p className="mt-5 rounded-xl bg-muted/50 p-4 text-sm font-medium text-text-secondary">
+              Seller reviews are available after signing in and cannot be left on your own listing.
+            </p>
+          )}
+        </form>
+
+        <div className="rounded-2xl border border-border glass-panel p-6 shadow-2xl">
+          <p className="text-sm font-bold uppercase tracking-widest text-text-secondary dark:text-white">Seller reviews</p>
+          <h2 className="mt-1 text-2xl font-black text-text-primary dark:text-white tracking-tight">What Buyers Say</h2>
+          <div className="mt-5 space-y-4">
+            {sellerReviews.length === 0 ? (
+              <p className="rounded-xl border border-dashed border-border p-6 text-center text-sm font-medium text-text-secondary">
+                No seller reviews yet.
+              </p>
+            ) : (
+              sellerReviews.map((review) => (
+                <div key={review._id} className="rounded-xl border border-border bg-muted/50 p-4">
+                  <div className="flex items-center justify-between gap-3">
+                    <p className="font-bold text-text-primary dark:text-white">{review.reviewer?.name || "Buyer"}</p>
                     <p className="text-sm font-bold text-amber-600">{review.rating}/5</p>
                   </div>
                   <p className="mt-2 text-sm leading-6 text-text-secondary">{review.comment}</p>

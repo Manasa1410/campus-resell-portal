@@ -34,6 +34,15 @@ export const deleteChat = async (conversationId) => {
   return data;
 };
 
+export const uploadChatImage = async (file) => {
+  const formData = new FormData();
+  formData.append("image", file);
+  const { data } = await API.post("/chats/message/upload", formData, {
+    headers: { "Content-Type": "multipart/form-data" },
+  });
+  return data;
+};
+
 // 🔢 Get total unread count for global badge
 export const getUnreadMessageCount = async () => {
   const { data } = await API.get("/chats/unread-count");

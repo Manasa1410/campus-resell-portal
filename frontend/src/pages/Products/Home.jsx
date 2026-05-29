@@ -31,6 +31,16 @@ const Home = () => {
   const [sortBy, setSortBy] = useState("newest");
   const [availabilityFilter, setAvailabilityFilter] = useState("all");
   const [locationFilter, setLocationFilter] = useState("All");
+  const [conditionFilter, setConditionFilter] = useState("all");
+  const [suggestions, setSuggestions] = useState([]);
+  const [recommendedProducts, setRecommendedProducts] = useState([]);
+  const recentlyViewed = useMemo(() => {
+    try {
+      return JSON.parse(localStorage.getItem("recentlyViewed")) || [];
+    } catch {
+      return [];
+    }
+  }, [products.length]);
 
   const fetchProducts = async () => {
     try {
@@ -42,6 +52,39 @@ const Home = () => {
       setLoading(false);
     }
   };
+
+  useEffect(() => {
+    const timer = setTimeout(async () => {
+      if (!keyword.trim()) {
+        setSuggestions([]);
+        return;
+      }
+
+      try {
+        const { data } = await API.get("/products/suggestions", { params: { keyword } });
+        setSuggestions(data.suggestions || []);
+      } catch {
+        setSuggestions([]);
+      }
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [keyword]);
+
+  useEffect(() => {
+    const loadRecommendations = async () => {
+      try {
+        const { data } = await API.get("/products/recommended", {
+          params: categoryFilter !== "All" ? { category: categoryFilter } : {},
+        });
+        setRecommendedProducts(data.products || []);
+      } catch {
+        setRecommendedProducts([]);
+      }
+    };
+
+    loadRecommendations();
+  }, [categoryFilter]);
 
   useEffect(() => {
     fetchProducts();
@@ -63,6 +106,7 @@ const Home = () => {
         if (keyword && !title.includes(keyword.toLowerCase())) return false;
         if (categoryFilter !== "All" && product.category !== categoryFilter) return false;
         if (availabilityFilter !== "all" && product.status !== availabilityFilter) return false;
+        if (conditionFilter !== "all" && product.condition !== conditionFilter) return false;
         if (locationFilter !== "All" && product.location !== locationFilter) return false;
         if (minPrice && price < Number(minPrice)) return false;
         if (maxPrice && price > Number(maxPrice)) return false;
@@ -75,9 +119,8 @@ const Home = () => {
         if (sortBy === "oldest") return new Date(a.createdAt) - new Date(b.createdAt);
         return new Date(b.createdAt) - new Date(a.createdAt);
       });
-  }, [products, user, keyword, categoryFilter, availabilityFilter, locationFilter, minPrice, maxPrice, sortBy]);
+  }, [products, user, keyword, categoryFilter, availabilityFilter, conditionFilter, locationFilter, minPrice, maxPrice, sortBy]);
 
-  const featuredProducts = filteredProducts.slice(0, 3);
   const recentlyAdded = filteredProducts.slice(0, 6);
 
   if (loading) {
@@ -127,24 +170,6 @@ const Home = () => {
       </section>
 
       <section>
-        <div className="mb-5 flex items-end justify-between gap-4">
-          <div>
-            <p className="text-sm font-bold uppercase tracking-widest text-text-secondary dark:text-white">Featured</p>
-            <h2 className="text-2xl font-black text-text-primary dark:text-white tracking-tight">Featured Products</h2>
-          </div>
-        </div>
-        {featuredProducts.length > 0 ? (
-          <div className="grid grid-cols-1 gap-6 md:grid-cols-3">
-            {featuredProducts.map((product) => (
-              <ProductCard key={product._id} product={product} />
-            ))}
-          </div>
-        ) : (
-          <EmptyState title="No featured products" description="Products will appear here as soon as campus listings are available." icon={<Icon name="bag" />} />
-        )}
-      </section>
-
-      <section>
         <div className="mb-5">
           <p className="text-sm font-bold uppercase tracking-widest text-text-secondary dark:text-white">Categories</p>
           <h2 className="text-2xl font-black text-text-primary dark:text-white tracking-tight">Shop by Category</h2>
@@ -188,6 +213,20 @@ const Home = () => {
                 placeholder="Search by title..."
                 className="w-full rounded-xl bg-muted py-3 pl-10 pr-4 text-sm outline-none transition focus:bg-card focus:ring-4 focus:ring-accent-indigo/10 text-text-primary dark:text-white"
               />
+              {suggestions.length > 0 && (
+                <div className="absolute left-0 right-0 top-full z-20 mt-2 overflow-hidden rounded-xl border border-border bg-card shadow-xl">
+                  {suggestions.map((suggestion) => (
+                    <Link
+                      key={suggestion._id}
+                      to={`/product/${suggestion._id}`}
+                      className="flex items-center justify-between gap-3 px-4 py-3 text-sm hover:bg-muted"
+                    >
+                      <span className="truncate font-bold text-text-primary">{suggestion.title}</span>
+                      <span className="shrink-0 text-xs font-semibold text-text-secondary">INR {suggestion.price}</span>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </label>
 
             <select
@@ -214,7 +253,7 @@ const Home = () => {
             </select>
           </div>
 
-          <div className="mt-4 grid gap-4 md:grid-cols-4">
+          <div className="mt-4 grid gap-4 md:grid-cols-5">
             <input
               type="number"
               placeholder="Min price"
@@ -249,6 +288,15 @@ const Home = () => {
               <option value="available">Available</option>
               <option value="sold">Sold</option>
             </select>
+            <select
+              value={conditionFilter}
+              onChange={(e) => setConditionFilter(e.target.value)}
+              className="rounded-xl bg-muted p-3 text-sm outline-none focus:ring-4 focus:ring-accent-indigo/10 text-text-primary dark:text-white"
+            >
+              <option value="all">All conditions</option>
+              <option value="new">New</option>
+              <option value="used">Used</option>
+            </select>
           </div>
         </Card>
 
@@ -266,6 +314,34 @@ const Home = () => {
           </div>
         )}
       </section>
+
+      {recentlyViewed.length > 0 && (
+        <section className="space-y-5">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-widest text-text-secondary dark:text-white">Recently viewed</p>
+            <h2 className="text-2xl font-black text-text-primary dark:text-white tracking-tight">Pick Up Where You Left Off</h2>
+          </div>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+            {recentlyViewed.slice(0, 4).map((product) => (
+              <ProductCard key={product._id} product={product} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {recommendedProducts.length > 0 && (
+        <section className="space-y-5">
+          <div>
+            <p className="text-sm font-bold uppercase tracking-widest text-text-secondary dark:text-white">Recommended</p>
+            <h2 className="text-2xl font-black text-text-primary dark:text-white tracking-tight">More Campus Finds</h2>
+          </div>
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-4">
+            {recommendedProducts.slice(0, 4).map((product) => (
+              <ProductCard key={product._id} product={product} />
+            ))}
+          </div>
+        </section>
+      )}
     </div>
   );
 };

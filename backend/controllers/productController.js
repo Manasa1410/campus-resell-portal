@@ -1,6 +1,8 @@
 import Product from "../models/productModel.js";
 import User from "../models/userModel.js";
 import Notification from "../models/notificationModel.js";
+import SavedSearch from "../models/savedSearchModel.js";
+import { getIO } from "../config/socket.js";
 
 const formatImageUrl = (req, imagePath) => {
   if (!imagePath) return imagePath;
@@ -28,18 +30,67 @@ const formatImages = (req, images = []) => {
 //
 export const createProduct = async (req, res) => {
   try {
-    const { title, description, price, category } = req.body;
+    const { title, description, price, category, condition = "used", location = "" } = req.body;
 
     const images = (req.files || []).map((file) => `/uploads/${file.filename}`);
 
     const product = await Product.create({
       title,
       description,
-      price,
+      price: Number(price),
       category,
+      condition,
+      location,
       images,
       seller: req.user._id || req.user.id,
     });
+
+    // Notify users with saved searches that match
+    try {
+      const sellerId = req.user.id || req.user._id;
+      const query = {
+        user: { $ne: sellerId } // Don't notify the seller
+      };
+
+      if (category) {
+        query.$or = [
+          { category: category },
+          { category: "All" }
+        ];
+      }
+
+      const matchingSearches = await SavedSearch.find(query).populate("user", "name email");
+
+      for (const search of matchingSearches) {
+        // Filter by min/max price if set
+        if (search.minPrice && Number(price) < search.minPrice) continue;
+        if (search.maxPrice && Number(price) > search.maxPrice) continue;
+
+        // Filter by keyword if set
+        if (search.keyword) {
+          const keywordRegex = new RegExp(search.keyword, "i");
+          const matches = keywordRegex.test(title) || keywordRegex.test(description);
+          if (!matches) continue;
+        }
+
+        // Create notification
+        const notification = await Notification.create({
+          recipient: search.user._id,
+          sender: sellerId,
+          product: product._id,
+          type: "new_listing",
+          message: `New match for saved search "${search.keyword || category}": "${title}" for INR ${price}`,
+        });
+
+        // Emit real-time notification
+        const io = getIO();
+        if (io) {
+          io.to(search.user._id.toString()).emit("newNotification", notification);
+        }
+      }
+    } catch (searchErr) {
+      console.error("Error dispatching saved search alerts:", searchErr);
+    }
 
     res.status(201).json({
       success: true,
@@ -58,7 +109,7 @@ export const createProduct = async (req, res) => {
 //
 export const getProducts = async (req, res) => {
   try {
-    const { keyword, category, status, minPrice, maxPrice, sort } = req.query;
+    const { keyword, category, status, minPrice, maxPrice, sort, condition, featured } = req.query;
 
     let query = {};
 
@@ -73,6 +124,14 @@ export const getProducts = async (req, res) => {
     // Filter by category
     if (category) {
       query.category = category;
+    }
+
+    if (condition && ["new", "used"].includes(condition)) {
+      query.condition = condition;
+    }
+
+    if (featured === "true") {
+      query.isFeatured = true;
     }
 
     // Price Range Filter
@@ -116,6 +175,60 @@ export const getProducts = async (req, res) => {
   }
 };
 
+export const getProductSuggestions = async (req, res) => {
+  try {
+    const { keyword = "" } = req.query;
+
+    if (!keyword.trim()) {
+      return res.json({ success: true, suggestions: [] });
+    }
+
+    const suggestions = await Product.find({
+      title: { $regex: keyword.trim(), $options: "i" },
+      status: "available",
+    })
+      .select("title category price images")
+      .limit(6)
+      .lean();
+
+    res.json({
+      success: true,
+      suggestions: suggestions.map((product) => ({
+        ...product,
+        images: formatImages(req, product.images),
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const getRecommendedProducts = async (req, res) => {
+  try {
+    const { category, exclude } = req.query;
+    const query = { status: "available" };
+
+    if (category) query.category = category;
+    if (exclude) query._id = { $ne: exclude };
+
+    const products = await Product.find(query)
+      .populate("seller", "name email isVerified averageRating totalReviews")
+      .sort({ isFeatured: -1, views: -1, createdAt: -1 })
+      .limit(8)
+      .lean();
+
+    res.json({
+      success: true,
+      products: products.map((product) => ({
+        ...product,
+        images: formatImages(req, product.images),
+      })),
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 //
 // 👤 Get Products added by the logged-in user
 //
@@ -148,8 +261,12 @@ export const getMyProducts = async (req, res) => {
 //
 export const getProductById = async (req, res) => {
   try {
-    const product = await Product.findById(req.params.id)
-      .populate("seller", "name email avatar isBanned")
+    const product = await Product.findByIdAndUpdate(
+      req.params.id,
+      { $inc: { views: 1 } },
+      { new: true }
+    )
+      .populate("seller", "name email avatar isBanned isVerified averageRating totalReviews lastSeen")
       .lean();
 
     if (!product) {
@@ -198,6 +315,9 @@ export const updateProduct = async (req, res) => {
     }
 
     const updateData = { ...req.body };
+    if (typeof updateData.price !== "undefined") {
+      updateData.price = Number(updateData.price);
+    }
 
     // If new images are uploaded, update the images array
     if (req.files && req.files.length > 0) {
@@ -257,6 +377,31 @@ export const deleteProduct = async (req, res) => {
   }
 };
 
+export const toggleFeaturedProduct = async (req, res) => {
+  try {
+    if (!req.user.isAdmin) {
+      return res.status(403).json({ success: false, message: "Admin access required" });
+    }
+
+    const product = await Product.findById(req.params.id);
+
+    if (!product) {
+      return res.status(404).json({ success: false, message: "Product not found" });
+    }
+
+    product.isFeatured = !product.isFeatured;
+    await product.save();
+
+    res.json({
+      success: true,
+      message: product.isFeatured ? "Product featured" : "Product removed from featured",
+      product,
+    });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
 //
 // ✅ Update product availability status
 //
@@ -291,6 +436,30 @@ export const updateProductStatus = async (req, res) => {
 
     product.status = status;
     await product.save();
+
+    // If marked as sold, notify wishlist users
+    if (status === "sold") {
+      try {
+        const usersWithWishlist = await User.find({ wishlist: product._id });
+        for (const wUser of usersWithWishlist) {
+          const notification = await Notification.create({
+            recipient: wUser._id,
+            sender: userId,
+            product: product._id,
+            type: "product_sold",
+            message: `The product "${product.title}" in your wishlist has been sold!`,
+          });
+
+          // Emit real-time notification
+          const io = getIO();
+          if (io) {
+            io.to(wUser._id.toString()).emit("newNotification", notification);
+          }
+        }
+      } catch (wishlistErr) {
+        console.error("Error notifying wishlist users of sold product:", wishlistErr);
+      }
+    }
 
     res.json({
       success: true,

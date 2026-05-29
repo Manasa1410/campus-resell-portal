@@ -1,5 +1,6 @@
 import User from "../models/userModel.js"; // ✅ corrected path
 import Product from "../models/productModel.js";
+import Otp from "../models/otpModel.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
 import { sendWelcomeEmail, sendOTPEmail } from "../services/emailService.js";
@@ -8,11 +9,19 @@ import {
   validateRegisterInput,
   validateLoginInput,
   validateEmail,
+  validateCollegeEmailDomain,
+  getAllowedCollegeDomains,
 } from "../utils/validators.js";
 
 import * as crypto from "crypto";
 //import generateResetToken from "../utils/generateResetToken.js";
-import { generateToken, generateResetToken } from "../utils/generateToken.js";
+import { generateToken } from "../utils/generateToken.js";
+
+const OTP_EXPIRY_MINUTES = Number(process.env.OTP_EXPIRY_MINUTES || 10);
+
+const generateOtp = () => crypto.randomInt(100000, 1000000).toString();
+
+const hashOtp = (otp) => crypto.createHash("sha256").update(String(otp)).digest("hex");
 
 //
 // 📝 Register User
@@ -30,6 +39,15 @@ export const registerUser = async (req, res) => {
         message: errorMessage,
       });
     }
+
+    // Validate if the email belongs to an allowed college domain
+    if (!validateCollegeEmailDomain(normalizedEmail)) {
+      return res.status(400).json({
+        success: false,
+        message: "Registration is restricted to educational institutional emails only (e.g., .edu or .ac.in).",
+      });
+    }
+
      const avatar = req.file ? req.file.path : "";
 
     // Check if user exists
@@ -66,6 +84,7 @@ export const registerUser = async (req, res) => {
       email: user.email,
       avatar: user.avatar,
       isAdmin: user.isAdmin,
+      isVerified: user.isVerified,
       token: generateToken(user._id),
     });
   } catch (error) {
@@ -135,6 +154,7 @@ export const loginUser = async (req, res) => {
       name: user.name,
       email: user.email,
       isAdmin: user.isAdmin,
+      isVerified: user.isVerified,
       token: generateToken(user._id),
     });
   } catch (error) {
@@ -173,6 +193,9 @@ export const getProfile = async (req, res) => {
       email: user.email,
       avatar: user.avatar,
       isAdmin: user.isAdmin,
+      isVerified: user.isVerified,
+      averageRating: user.averageRating,
+      totalReviews: user.totalReviews,
       createdAt: user.createdAt,
       trustScore: Number(trustScore),
       totalListings: products.length
@@ -299,20 +322,28 @@ export const forgotPassword = async (req, res) => {
     }
 
     // Generate 6-digit numeric OTP
-    const otp = Math.floor(100000 + Math.random() * 900000).toString();
-    const hashedToken = crypto.createHash("sha256").update(otp).digest("hex");
+    const otp = generateOtp();
+    const hashedToken = hashOtp(otp);
 
     user.resetPasswordToken = hashedToken;
     user.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 mins
 
     await user.save();
     
-    await sendOTPEmail(user.email, otp);
-
-    res.json({
-      success: true,
-      message: "OTP sent to email",
-    });
+    try {
+      await sendOTPEmail(user.email, otp);
+      console.log(`[OTP Success] Password reset OTP sent successfully to ${user.email}`);
+      res.json({
+        success: true,
+        message: "OTP sent to email",
+      });
+    } catch (emailError) {
+      console.error(`[SMTP Error] Failed to send password reset OTP to ${user.email}. Details:`, emailError.message);
+      res.status(500).json({
+        success: false,
+        message: "Failed to deliver verification code. Please check your SMTP mail server configuration.",
+      });
+    }
 
   } catch (err) {
     res.status(500).json({
@@ -365,3 +396,202 @@ export const resetPassword = async (req, res) => {
     });
   }
 };
+
+// 🔑 Verify Reset OTP
+export const verifyResetOtp = async (req, res) => {
+  try {
+    const { otp } = req.body;
+    if (!otp) {
+      return res.status(400).json({ success: false, message: "OTP is required" });
+    }
+
+    const hashedToken = crypto
+      .createHash("sha256")
+      .update(otp)
+      .digest("hex");
+
+    const user = await User.findOne({
+      resetPasswordToken: hashedToken,
+      resetPasswordExpire: { $gt: Date.now() },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        success: false,
+        message: "OTP is invalid or expired",
+      });
+    }
+
+    res.json({
+      success: true,
+      message: "OTP verified successfully",
+    });
+  } catch (err) {
+    res.status(500).json({
+      success: false,
+      message: err.message,
+    });
+  }
+};
+
+// 📩 Request Email Verification OTP
+export const requestEmailVerification = async (req, res) => {
+  try {
+    const { email } = req.body;
+    const targetEmail = (email || req.user.email).toLowerCase().trim();
+
+    if (!validateEmail(targetEmail)) {
+      return res.status(400).json({ success: false, message: "Use a valid email address" });
+    }
+
+    // Strict Educational Domain Check
+    if (!targetEmail.endsWith(".edu") && !targetEmail.endsWith(".edu.in")) {
+      return res.status(400).json({
+        success: false,
+        message: "Access restricted. Only educational email addresses ending with .edu or .edu.in are allowed.",
+      });
+    }
+
+    const user = await User.findById(req.user.id || req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    const emailExists = await User.findOne({ email: targetEmail, _id: { $ne: user._id } });
+    if (emailExists) {
+      return res.status(400).json({ success: false, message: "Email already in use" });
+    }
+
+    // Cooldown check (30 seconds resend cooldown)
+    const latestOtp = await Otp.findOne({ email: targetEmail }).sort({ createdAt: -1 });
+    if (latestOtp) {
+      const timePassed = Date.now() - new Date(latestOtp.createdAt).getTime();
+      if (timePassed < 30 * 1000) {
+        const waitTime = Math.ceil((30 * 1000 - timePassed) / 1000);
+        return res.status(429).json({
+          success: false,
+          message: `Please wait ${waitTime} seconds before requesting another OTP.`,
+        });
+      }
+    }
+
+    // Rate Limit check (max 5 requests per 10 minutes)
+    const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
+    const recentOtpCount = await Otp.countDocuments({
+      email: targetEmail,
+      createdAt: { $gte: tenMinutesAgo },
+    });
+    if (recentOtpCount >= 5) {
+      return res.status(429).json({
+        success: false,
+        message: "Too many OTP requests. Please try again after 10 minutes.",
+      });
+    }
+
+    // Generate secure 6-digit OTP
+    const otp = crypto.randomInt(100000, 1000000).toString();
+
+    // Hash OTP before storing
+    const hashedOtp = await bcrypt.hash(otp, 10);
+    const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
+
+    // Save to the Otp collection
+    await Otp.create({
+      email: targetEmail,
+      otp: hashedOtp,
+      expiresAt,
+    });
+
+    // Try sending email and return correct response status
+    try {
+      await sendOTPEmail(targetEmail, otp);
+      console.log(`[OTP Send Success] Successfully sent verification email to ${targetEmail}`);
+      return res.status(200).json({
+        success: true,
+        message: `Verification code sent to ${targetEmail}`,
+        expiresInMinutes: 10,
+      });
+    } catch (emailError) {
+      console.error(`[SMTP Send Error] Failed to send verification email to ${targetEmail}. Details:`, emailError.message);
+      return res.status(500).json({
+        success: false,
+        message: "Failed to deliver verification code. Please check your SMTP mail server configuration.",
+      });
+    }
+  } catch (error) {
+    console.error("[OTP Send General Error]:", error.message);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// 🔄 Confirm Email Verification
+export const confirmEmailVerification = async (req, res) => {
+  try {
+    const { otp, newEmail } = req.body;
+    const targetEmail = (newEmail || req.user.email).toLowerCase().trim();
+
+    if (!otp) {
+      return res.status(400).json({ success: false, message: "OTP is required" });
+    }
+
+    // Find all active OTP records for this email
+    const storedOtps = await Otp.find({
+      email: targetEmail,
+      expiresAt: { $gt: new Date() },
+    });
+
+    if (!storedOtps || storedOtps.length === 0) {
+      return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
+    }
+
+    // Compare input OTP with hashed OTP records using bcrypt
+    let isMatched = false;
+    for (const stored of storedOtps) {
+      const match = await bcrypt.compare(otp, stored.otp);
+      if (match) {
+        isMatched = true;
+        break;
+      }
+    }
+
+    if (!isMatched) {
+      return res.status(400).json({ success: false, message: "Invalid or expired OTP" });
+    }
+
+    const user = await User.findById(req.user.id || req.user._id);
+    if (!user) {
+      return res.status(404).json({ success: false, message: "User not found" });
+    }
+
+    // Check if the target email is already taken
+    const emailExists = await User.findOne({ email: targetEmail, _id: { $ne: user._id } });
+    if (emailExists) {
+      return res.status(400).json({ success: false, message: "Email already in use" });
+    }
+
+    // Update user status
+    user.email = targetEmail;
+    user.isVerified = true;
+    await user.save();
+
+    // Prevent reuse by deleting all OTP records for this email address
+    await Otp.deleteMany({ email: targetEmail });
+
+    return res.status(200).json({
+      success: true,
+      message: "Account verified successfully! Check out your new badge.",
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        isVerified: user.isVerified,
+      },
+    });
+  } catch (error) {
+    console.error("[OTP Verify General Error]:", error.message);
+    return res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+export const sendOtp = requestEmailVerification;
+export const verifyOtp = confirmEmailVerification;

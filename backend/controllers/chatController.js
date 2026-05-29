@@ -127,6 +127,7 @@ export const getMessages = async (req, res) => {
       deletedFor: { $ne: req.user.id } // Exclude messages deleted "for me"
     })
       .populate("sender", "name email")
+      .populate("sharedProduct", "title price images")
       .sort({ createdAt: 1 });
 
     // Mark messages as "seen" for the current user
@@ -231,6 +232,22 @@ export const getUnreadCount = async (req, res) => {
     });
 
     res.json({ success: true, count });
+  } catch (error) {
+    res.status(500).json({ success: false, message: error.message });
+  }
+};
+
+// 📷 Upload Image for Chat Message
+export const uploadChatImage = async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ success: false, message: "No image file provided" });
+    }
+    const fileUrl = `/uploads/${req.file.filename}`;
+    res.json({
+      success: true,
+      fileUrl,
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }

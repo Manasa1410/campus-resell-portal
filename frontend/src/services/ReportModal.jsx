@@ -2,7 +2,7 @@ import { useState } from "react";
 import { createReport } from "../services/reportService";
 import { toast } from "react-hot-toast";
 
-const ReportModal = ({ isOpen, onClose, reportedUser, product }) => {
+const ReportModal = ({ isOpen, onClose, reportedUser, product, message }) => {
   const [reason, setReason] = useState("Spam");
   const [description, setDescription] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -13,7 +13,7 @@ const ReportModal = ({ isOpen, onClose, reportedUser, product }) => {
     e.preventDefault();
     setSubmitting(true);
     try {
-      await createReport({ reportedUser, product, reason, description });
+      await createReport({ reportedUser, product, message, reason, description });
       toast.success("Report submitted successfully");
       onClose();
     } catch (err) {
@@ -27,7 +27,7 @@ const ReportModal = ({ isOpen, onClose, reportedUser, product }) => {
     <div className="fixed inset-0 z-50 bg-black bg-opacity-50 flex items-center justify-center p-4">
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
         <h2 className="text-xl font-bold mb-4 text-gray-800">
-          Report {product ? "Product" : "User"}
+          Report {message ? "Message" : product ? "Product" : "User"}
         </h2>
         
         <form onSubmit={handleSubmit} className="space-y-4">

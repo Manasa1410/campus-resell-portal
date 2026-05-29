@@ -7,6 +7,10 @@ const reportSchema = new mongoose.Schema(
       ref: "User",
       required: true,
     },
+    reportedBy: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "User",
+    },
     targetId: {
       type: mongoose.Schema.Types.ObjectId,
       required: true,
@@ -14,7 +18,7 @@ const reportSchema = new mongoose.Schema(
     },
     targetType: {
       type: String,
-      enum: ["Product", "User"],
+      enum: ["Product", "User", "Message"],
       required: true,
     },
     reason: {
@@ -26,7 +30,7 @@ const reportSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ["pending", "resolved"],
+      enum: ["pending", "reviewed", "resolved"],
       default: "pending",
     },
     adminNote: {

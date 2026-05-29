@@ -56,6 +56,19 @@ const productSchema = new mongoose.Schema(
       default: "available",
     },
 
+    condition: {
+      type: String,
+      enum: ["new", "used"],
+      default: "used",
+      index: true,
+    },
+
+    isFeatured: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+
     // ⭐ Optional but powerful
     location: {
       type: String,

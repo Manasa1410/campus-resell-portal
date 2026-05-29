@@ -26,8 +26,8 @@ const AdminDashboard = () => {
   const cards = [
     { label: "Total Users", value: stats?.users, color: "bg-blue-500", link: "/admin/users" },
     { label: "Total Products", value: stats?.products, color: "bg-indigo-500", link: "/" },
-    { label: "Available Items", value: stats?.available, color: "bg-green-500", link: "/" },
-    { label: "Active Reports", value: "Review", color: "bg-red-500", link: "/admin/reports" },
+    { label: "Active Chats", value: stats?.chats, color: "bg-green-500", link: "/chat" },
+    { label: "Active Reports", value: stats?.reports, color: "bg-red-500", link: "/admin/reports" },
   ];
 
   return (

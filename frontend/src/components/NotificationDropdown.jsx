@@ -82,7 +82,7 @@ const NotificationDropdown = ({ user }) => {
         className="relative grid h-10 w-10 place-items-center rounded-xl border border-slate-200 bg-white text-slate-600 transition hover:-translate-y-0.5 hover:shadow-md dark:border-slate-800 dark:bg-slate-900 dark:text-slate-200"
         aria-label="Notifications"
       >
-        <Icon name="spark" className="h-5 w-5" />
+        <Icon name="bell" className="h-5 w-5" />
         {unreadCount > 0 && (
           <span className="absolute -right-1 -top-1 rounded-full border-2 border-white bg-red-500 px-1.5 py-0.5 text-[10px] font-bold text-white dark:border-slate-950">
             {unreadCount}

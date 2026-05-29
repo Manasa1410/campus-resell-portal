@@ -46,6 +46,38 @@ const userSchema = new mongoose.Schema(
       default: "user",
     },
 
+    verificationOTP: {
+      type: String,
+      default: null,
+    },
+
+    verificationEmail: {
+      type: String,
+      default: null,
+      lowercase: true,
+      trim: true,
+    },
+
+    verificationOTPExpires: {
+      type: Date,
+      default: null,
+    },
+
+    lastSeen: {
+      type: Date,
+      default: null,
+    },
+
+    averageRating: {
+      type: Number,
+      default: 0,
+    },
+
+    totalReviews: {
+      type: Number,
+      default: 0,
+    },
+
     wishlist: [
       {
         type: mongoose.Schema.Types.ObjectId,

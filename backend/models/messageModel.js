@@ -14,10 +14,15 @@ const messageSchema = new mongoose.Schema(
     },
     text: {
       type: String,
-      required: true,
+      default: "",
+      trim: true,
     },
     file: { // For images/files (future enhancement)
       type: String,
+    },
+    sharedProduct: { // For sharing a product details card in chat
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Product",
     },
     status: { // Message status: sent, delivered, seen
       type: String,

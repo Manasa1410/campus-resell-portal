@@ -15,11 +15,10 @@ const notificationSchema = new mongoose.Schema(
     product: {
       type: mongoose.Schema.Types.ObjectId,
       ref: "Product",
-      required: true,
     },
     type: {
       type: String,
-      enum: ["message", "wishlist", "review", "interest"],
+      enum: ["message", "wishlist", "review", "interest", "product_sold", "new_listing"],
       required: true,
     },
     message: {

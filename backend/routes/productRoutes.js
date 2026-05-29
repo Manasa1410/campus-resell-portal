@@ -5,9 +5,12 @@ import path from "path";
 import {
   createProduct,
   getProducts,
+  getProductSuggestions,
+  getRecommendedProducts,
   getProductById,
   updateProduct,
   deleteProduct,
+  toggleFeaturedProduct,
   markAsSold,
   getMyProducts,
   updateProductStatus,
@@ -38,8 +41,11 @@ const upload = multer({ storage });
 
 router.post("/", protect, upload.array("images", 5), createProduct);
 router.get("/", getProducts);
+router.get("/suggestions", getProductSuggestions);
+router.get("/recommended", getRecommendedProducts);
 router.get("/my-products", protect, getMyProducts);
 router.get("/wishlist", protect, getWishlistProducts);
+router.put("/:id/featured", protect, toggleFeaturedProduct);
 router.get("/:id", getProductById);
 router.put("/:id", protect, upload.array("images", 5), updateProduct);
 router.delete("/:id", protect, deleteProduct);

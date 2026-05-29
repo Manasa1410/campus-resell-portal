@@ -6,13 +6,16 @@ import {
   updateAvatar,
   updateProfile,
   updatePassword,
+  forgotPassword,
+  resetPassword,
+  verifyResetOtp,
+  requestEmailVerification,
+  confirmEmailVerification,
+  sendOtp,
+  verifyOtp,
 } from "../controllers/authController.js";
 import { protect } from "../middleware/authMiddleware.js";
 import { upload } from "../middleware/upload.js";
-import {
-  forgotPassword,
-  resetPassword,
-} from "../controllers/authController.js";
 
 const router = express.Router();
 
@@ -23,6 +26,11 @@ router.put("/profile/avatar", protect, upload.single("avatar"), updateAvatar);
 router.put("/profile", protect, updateProfile);
 router.put("/password", protect, updatePassword);
 router.post("/forgot-password", forgotPassword);
+router.post("/verify-reset-otp", verifyResetOtp);
 router.put("/reset-password/:token", resetPassword);
+router.post("/send-otp", protect, sendOtp);
+router.post("/verify-otp", protect, verifyOtp);
+router.post("/verify-email/request", protect, requestEmailVerification);
+router.post("/verify-email/confirm", protect, confirmEmailVerification);
 
 export default router;
