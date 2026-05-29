@@ -1,7 +1,6 @@
+import "dotenv/config";
 import express from "express"; // ✅ MISSING FIX
-import dotenv from "dotenv";
 import http from "http";
-dotenv.config();
 import connectDB from "./config/db.js";
 import app from "./app.js";
 import { initSocket } from "./config/socket.js";
@@ -38,8 +37,6 @@ app.use("/api/reports", reportRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/seller-reviews", sellerReviewRoutes);
 app.use("/api/saved-searches", savedSearchRoutes);
-
-app.use("/uploads", express.static(path.join("uploads")));
 
 app.use("/api/users", userRoutes);
 
