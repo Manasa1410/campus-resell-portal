@@ -24,7 +24,7 @@ const NotificationDropdown = ({ user }) => {
     if (user?._id) {
       fetchNotifications();
 
-      const socket = io("http://localhost:5001");
+      const socket = io(import.meta.env.VITE_SOCKET_URL || "https://campus-resell-portal-2.onrender.com");
       socket.emit("join", user._id);
 
       socket.on("newNotification", (notification) => {

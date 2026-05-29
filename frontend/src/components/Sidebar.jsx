@@ -1,5 +1,6 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
+import { BACKEND_URL } from "../services/api";
 
 const icons = {
   dashboard: (
@@ -152,7 +153,7 @@ const Sidebar = ({ collapsed, mobileOpen, onCloseMobile, onToggleCollapse }) => 
             <div className="border-t border-border pt-4">
               <div className={`mb-3 flex items-center gap-3 rounded-xl bg-muted/50 p-3 border border-border ${collapsed ? "lg:justify-center" : ""}`}>
                 <img
-                  src={user?.avatar ? `http://localhost:5001/${user.avatar}` : "/default-avatar.png"}
+                  src={user?.avatar ? `${BACKEND_URL}/${user.avatar}` : "/default-avatar.png"}
                   alt={user?.name || "User"}
                   className="h-10 w-10 rounded-full border border-indigo-500/20 dark:border-indigo-500/30 object-cover"
                 />

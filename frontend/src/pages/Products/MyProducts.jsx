@@ -4,11 +4,12 @@ import Loader from "../../components/Loader";
 import { Link } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import useAuth from "../../hooks/useAuth";
+import { BACKEND_URL } from "../../services/api";
 
 const getImageSrc = (src) => {
   if (!src) return "/default-product.png";
   if (src.startsWith("http") || src.startsWith("/")) return src;
-  return `http://localhost:5001/${src}`;
+  return `${BACKEND_URL}/${src}`;
 };
 
 const MyProducts = () => {
