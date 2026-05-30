@@ -13,7 +13,7 @@ const AdminDashboard = () => {
         const { data } = await API.get("/users/admin/stats");
         setStats(data.stats);
       } catch (err) {
-        console.error("Failed to load stats");
+        console.error("Failed to load stats", err);
       } finally {
         setLoading(false);
       }

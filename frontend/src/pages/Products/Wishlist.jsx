@@ -10,7 +10,7 @@ import { ProductGridSkeleton } from "../../components/ui/Skeleton";
 const Wishlist = () => {
   const [wishlist, setWishlist] = useState([]);
   const [loading, setLoading] = useState(true);
-  const { user, setUser } = useAuth();
+  const { setUser } = useAuth();
 
   useEffect(() => {
     const fetchWishlist = async () => {
@@ -29,7 +29,7 @@ const Wishlist = () => {
     };
 
     fetchWishlist();
-  }, []);
+  }, [setUser]);
 
   const handleRemoveFromWishlist = async (productId) => {
     try {

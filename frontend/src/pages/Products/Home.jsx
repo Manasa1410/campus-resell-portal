@@ -34,13 +34,13 @@ const Home = () => {
   const [conditionFilter, setConditionFilter] = useState("all");
   const [suggestions, setSuggestions] = useState([]);
   const [recommendedProducts, setRecommendedProducts] = useState([]);
-  const recentlyViewed = useMemo(() => {
+  const [recentlyViewed] = useState(() => {
     try {
       return JSON.parse(localStorage.getItem("recentlyViewed")) || [];
     } catch {
       return [];
     }
-  }, [products.length]);
+  });
 
   const fetchProducts = async () => {
     try {

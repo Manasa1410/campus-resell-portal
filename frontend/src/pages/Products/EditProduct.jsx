@@ -21,6 +21,7 @@ const EditProduct = () => {
         setForm({ title, description, price, category });
         setPreviews(existingImages); // Show existing images as initial previews
       } catch (err) {
+        console.error("Failed to fetch product", err);
         navigate("/my-products");
       } finally {
         setLoading(false);

@@ -17,24 +17,23 @@ const MyProducts = () => {
   const [loading, setLoading] = useState(true);
   const { setUser } = useAuth();
 
-  const fetchUserProducts = async () => {
-    try {
-      const data = await getMyProducts();
-      // Safely access products and default to empty array
-      setProducts(data?.products || []);
-      if (setUser && data?.products) {
-        setUser(prev => ({ ...prev, totalListings: data.products.length }));
-      }
-    } catch (err) {
-      console.error("Failed to fetch products", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
+    const fetchUserProducts = async () => {
+      try {
+        const data = await getMyProducts();
+        // Safely access products and default to empty array
+        setProducts(data?.products || []);
+        if (setUser && data?.products) {
+          setUser(prev => ({ ...prev, totalListings: data.products.length }));
+        }
+      } catch (err) {
+        console.error("Failed to fetch products", err);
+      } finally {
+        setLoading(false);
+      }
+    };
     fetchUserProducts();
-  }, []);
+  }, [setUser]);
 
   const handleDelete = async (id) => {
     if (!window.confirm("Are you sure you want to delete this product?")) return;
@@ -46,6 +45,7 @@ const MyProducts = () => {
       }
       toast.success("Product deleted successfully ✅");
     } catch (err) {
+      console.error(err);
       toast.error("Failed to delete product");
     }
   };
@@ -56,6 +56,7 @@ const MyProducts = () => {
       await updateProductStatus(id, newStatus);
       setProducts(products.map(p => p._id === id ? { ...p, status: newStatus } : p));
     } catch (err) {
+      console.error(err);
       toast.error("Failed to update status");
     }
   };

@@ -1,3 +1,4 @@
+/* eslint-disable react-hooks/set-state-in-effect */
 import { useEffect, useState } from "react";
 import API from "../../services/api";
 import Card from "../../components/ui/Card";
@@ -33,6 +34,7 @@ const Reports = () => {
       toast.success("Report resolved ✅");
       fetchReports();
     } catch (err) {
+      console.error(err);
       toast.error("Failed to update status");
     }
   };
@@ -45,6 +47,7 @@ const Reports = () => {
       toast.success(data.message);
       fetchReports();
     } catch (err) {
+      console.error(err);
       toast.error("Failed to ban user");
     }
   };
