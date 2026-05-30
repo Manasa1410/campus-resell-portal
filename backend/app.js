@@ -14,8 +14,8 @@ app.enable("trust proxy");
 
 const corsOptions = {
   origin: [
-    //process.env.FRONTEND_URL,
-    "https://campus-resell-portal-2.onrender.com",
+    "https://campus-resell-portal.vercel.app",
+    //https://campus-resell-portal-2.onrender.com",
     "http://127.0.0.1:5173",
     "http://localhost:5173"
   ].filter(Boolean),
@@ -23,7 +23,7 @@ const corsOptions = {
 };
 
 app.use(cors(corsOptions));
-app.options("*", cors(corsOptions));
+//app.options("/.*/", cors(corsOptions));
 app.use(express.json());
 
 const uploadsDir = path.join(__dirname, "uploads");
