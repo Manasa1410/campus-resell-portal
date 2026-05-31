@@ -74,7 +74,7 @@ const MyProducts = () => {
             <div key={product._id} className="glass-panel rounded-2xl overflow-hidden shadow-2xl transition hover:border-accent-indigo/30">
               <div className="relative overflow-hidden bg-slate-800">
                 <img 
-                  src={resolveMediaUrl(product.images?.[0], "/default-product.png")} 
+                  src={resolveMediaUrl(product.images?.[0], "/default-product.png")} // resolveMediaUrl handles absolute Cloudinary URLs
                   alt={product.title} 
                   className="w-full h-48 object-cover transition duration-300 hover:scale-105" 
                 />

@@ -3,7 +3,7 @@ import Product from "../models/productModel.js";
 import Otp from "../models/otpModel.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
-import { saveUploadedImage } from "../config/cloudinaryUpload.js";
+import { upload, saveUploadedImage } from "../config/cloudinaryUpload.js"; // Import upload middleware and helper
 import { sendWelcomeEmail, sendOTPEmail } from "../services/emailService.js";
 import {
   validateRegisterInput,
@@ -17,23 +17,18 @@ import * as crypto from "crypto";
 //import generateResetToken from "../utils/generateResetToken.js";
 import { generateToken } from "../utils/generateToken.js";
 
-const OTP_EXPIRY_MINUTES = Number(process.env.OTP_EXPIRY_MINUTES || 10);
-
 const formatImageUrl = (req, imagePath) => {
-  if (!imagePath || imagePath.startsWith("http")) return imagePath || "";
-
-  const configuredBackendUrl = (process.env.BACKEND_URL || "").replace(/\/api\/?$/, "").replace(/\/$/, "");
-  const host = req?.get("host") || "localhost:5001";
-  const hostUrl = configuredBackendUrl || (req ? `${req.protocol}://${host}` : `http://${host}`);
-
-  // For local files, ensure we don't double-prefix 'uploads/' and handle slashes
-  const cleanPath = imagePath.replace(/^.*uploads[/\\]/, "").replace(/^\/+/, "").replace(/\\/g, "/");
-  return `${hostUrl}/uploads/${cleanPath}`.replace(/([^:]\/)\/+/g, "$1"); // Normalize slashes
+  // Cloudinary URLs are absolute, so return directly.
+  // If imagePath is null/undefined, return empty string or default.
+  return imagePath || "";
 };
 
 const generateOtp = () => crypto.randomInt(100000, 1000000).toString();
 
 const hashOtp = (otp) => crypto.createHash("sha256").update(String(otp)).digest("hex");
+
+// Multer middleware for avatar upload
+const uploadAvatar = upload.single('avatar'); // 'upload' is now the multer instance
 
 //
 // 📝 Register User
@@ -69,11 +64,6 @@ export const registerUser = async (req, res) => {
       });
     }
 
-    let avatar = "";
-    if (req.file) {
-      avatar = await saveUploadedImage(req.file, "campus_resell/avatars");
-    }
-
     // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
@@ -81,8 +71,8 @@ export const registerUser = async (req, res) => {
     const user = await User.create({
       name,
       email: normalizedEmail,
-      password: hashedPassword,
-      avatar: avatar,
+      password: hashedPassword, // Use saveUploadedImage to handle the file upload and get the URL
+      avatar: req.file ? await saveUploadedImage(req.file, 'campus_resell/avatars') : "",
     });
 
     // ✅ Send welcome email AFTER user creation (non-blocking)
@@ -294,23 +284,22 @@ export const updatePassword = async (req, res) => {
 
 //update avatar
 
-export const updateAvatar = async (req, res) => {
+export const updateAvatar = async (req, res) => { // This function needs to be wrapped by uploadAvatar middleware in the route definition
   try {
     // Check if file uploaded
-    if (!req.file) {
+    if (!req.file || !req.file.path) { // req.file.path will be the secure_url from Cloudinary
       return res.status(400).json({
         success: false,
         message: "No image uploaded",
       });
     }
 
-    const avatarPath = await saveUploadedImage(req.file, "campus_resell/avatars");
-    console.log(`[avatar] upload result for user=${req.user?.id || req.user?._id}: ${avatarPath}`);
+    console.log(`[avatar] upload result for user=${req.user?.id || req.user?._id}: ${req.file.path}`);
     const user = await User.findById(req.user.id || req.user._id);
     
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
-    user.avatar = avatarPath;
+    user.avatar = await saveUploadedImage(req.file, 'campus_resell/avatars'); // Use saveUploadedImage to handle the file upload
     await user.save();
     console.log(`[avatar] saved to DB for user=${user._id}: ${user.avatar}`);
 

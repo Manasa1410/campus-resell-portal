@@ -2,6 +2,7 @@ import cloudinary from "./cloudinary.js";
 import fs from "fs";
 import path from "path";
 import crypto from "crypto";
+import multer from 'multer'; // Import multer
 import { fileURLToPath } from "url";
 
 const __filename = fileURLToPath(import.meta.url);
@@ -10,6 +11,11 @@ const uploadsDir = path.join(__dirname, "..", "uploads");
 
 const sanitizeFileName = (name = "upload") =>
   path.basename(name).replace(/[^a-z0-9._-]/gi, "_");
+
+// Configure multer to store files in memory
+const memoryStorage = multer.memoryStorage();
+// Export the multer instance as 'upload' middleware
+export const upload = multer({ storage: memoryStorage });
 
 const saveBufferLocally = async (file) => {
   await fs.promises.mkdir(uploadsDir, { recursive: true });

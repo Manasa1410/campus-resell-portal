@@ -184,7 +184,7 @@ const ProductDetails = () => {
             <div className="relative grid aspect-4/3 place-items-center bg-slate-900/40">
               <img
                 src={resolveMediaUrl(product.images?.[currentImageIndex], "/default-product.png")}
-                alt={product.title}
+                alt={product.title} // resolveMediaUrl handles absolute Cloudinary URLs
                 className="h-full w-full object-contain p-4"
               />
 
@@ -222,7 +222,7 @@ const ProductDetails = () => {
                     currentImageIndex === index ? "border-blue-600 shadow-md" : "border-transparent opacity-70 hover:opacity-100"
                   }`}
                 >
-                  <img src={resolveMediaUrl(img, "/default-product.png")} alt={`${product.title} thumbnail ${index + 1}`} className="h-full w-full object-cover" />
+                  <img src={resolveMediaUrl(img, "/default-product.png")} alt={`${product.title} thumbnail ${index + 1}`} className="h-full w-full object-cover" /> // resolveMediaUrl handles absolute Cloudinary URLs
                 </button>
               ))}
             </div>

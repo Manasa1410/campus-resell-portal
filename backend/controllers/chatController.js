@@ -1,24 +1,18 @@
 import Chat from "../models/chatModel.js";
 import Message from "../models/messageModel.js";
-import { saveUploadedImage } from "../config/cloudinaryUpload.js";
+import { upload, saveUploadedImage } from "../config/cloudinaryUpload.js"; // Import upload middleware and helper
 
 // Standardized formatImageUrl function
 const formatImageUrl = (req, imagePath) => {
-  if (!imagePath) return imagePath;
-
-  if (imagePath.startsWith("http")) return imagePath;
-  const configuredBackendUrl = (process.env.BACKEND_URL || "").replace(/\/api\/?$/, "").replace(/\/$/, "");
-  const host = req?.get("host") || "localhost:5001";
-  const hostUrl = configuredBackendUrl || (req ? `${req.protocol}://${host}` : `http://${host}`);
-
-  // For local files, ensure we don't double-prefix 'uploads/'
-  const cleanPath = imagePath.replace(/^.*uploads[/\\]/, "");
-  return `${hostUrl}/uploads/${cleanPath}`;
+  return imagePath || ""; // Cloudinary URLs are absolute
 };
 
 const formatImages = (req, images = []) => {
   return images.map((image) => formatImageUrl(req, image));
 };
+
+// Multer middleware for chat image uploads
+const uploadChatImageMiddleware = upload.single('image'); // 'image' is the field name
 
 //
 // 💬 Create or Get Chat
@@ -236,14 +230,14 @@ export const getUnreadCount = async (req, res) => {
 };
 
 // 📷 Upload Image for Chat Message
-export const uploadChatImage = async (req, res) => {
+export const uploadChatImage = async (req, res) => { // This function needs to be wrapped by uploadChatImageMiddleware in the route definition
   try {
     if (!req.file) {
       return res.status(400).json({ success: false, message: "No image file provided" });
     }
 
     // Upload to Cloudinary and cleanup local temp file
-    const fileUrl = await saveUploadedImage(req.file, "campus_resell/chat");
+    const fileUrl = await saveUploadedImage(req.file, 'campus_resell/chat'); // Use helper to upload buffer
 
     res.json({
       success: true,

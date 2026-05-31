@@ -2,26 +2,19 @@ import Product from "../models/productModel.js";
 import User from "../models/userModel.js";
 import Notification from "../models/notificationModel.js";
 import SavedSearch from "../models/savedSearchModel.js";
-import { getIO } from "../config/socket.js";
-import { saveUploadedImage } from "../config/cloudinaryUpload.js";
+import { getIO } from "../config/socket.js"; // Keep getIO import
+import { upload, saveUploadedImage } from "../config/cloudinaryUpload.js"; // Import upload middleware and helper
 
 const formatImageUrl = (req, imagePath) => {
-  if (!imagePath) return imagePath;
-
-  if (!imagePath || imagePath.startsWith("http")) return imagePath || "";
-
-  const configuredBackendUrl = (process.env.BACKEND_URL || "").replace(/\/api\/?$/, "").replace(/\/$/, "");
-  const host = req?.get("host") || "localhost:5001";
-  const hostUrl = configuredBackendUrl || (req ? `${req.protocol}://${host}` : `http://${host}`);
-
-  // For local files, ensure we don't double-prefix 'uploads/' and handle slashes
-  const cleanPath = imagePath.replace(/^.*uploads[/\\]/, "").replace(/^\/+/, "").replace(/\\/g, "/");
-  return `${hostUrl}/uploads/${cleanPath}`.replace(/([^:]\/)\/+/g, "$1"); // Normalize slashes
+  return imagePath || ""; // Cloudinary URLs are absolute
 };
 
 const formatImages = (req, images = []) => {
   return images.map((image) => formatImageUrl(req, image));
 };
+
+// Multer middleware for product image uploads
+const uploadProductImages = upload.array('images', 5); // 'images' is the field name, 5 is max count
 
 //
 // ➕ Create Product
@@ -29,16 +22,15 @@ const formatImages = (req, images = []) => {
 export const createProduct = async (req, res) => {
   try {
     const { title, description, price, category, condition = "used", location = "" } = req.body;
-    
+
     const imageUrls = [];
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
-        const saved = await saveUploadedImage(file, "campus_resell/products");
-        console.log(`[product.upload] saved image for user=${req.user?._id || req.user?.id}: ${saved}`);
-        imageUrls.push(saved);
+        const url = await saveUploadedImage(file, 'campus_resell/products');
+        imageUrls.push(url);
       }
     }
-    
+
     const product = await Product.create({
       title,
       description,
@@ -334,9 +326,8 @@ export const updateProduct = async (req, res) => {
     const imageUrls = [];
     if (req.files && req.files.length > 0) {
       for (const file of req.files) {
-        const saved = await saveUploadedImage(file, "campus_resell/products");
-        console.log(`[product.update] saved image for user=${req.user?._id || req.user?.id}: ${saved}`);
-        imageUrls.push(saved);
+        const url = await saveUploadedImage(file, 'campus_resell/products');
+        imageUrls.push(url);
       }
       updateData.images = imageUrls;
     }
