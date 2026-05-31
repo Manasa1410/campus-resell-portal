@@ -48,7 +48,7 @@ const Profile = () => {
     e.preventDefault();
     setUpdating(true);
     try {
-      await API.put("/auth/profile", { name, email });
+      await API.put("/api/auth/profile", { name, email });
       setUser((prev) => ({ ...prev, name, email })); // Update global user state
       setIsEditing(false);
       toast.success("Profile updated");
@@ -63,7 +63,7 @@ const Profile = () => {
     e.preventDefault();
     setUpdating(true);
     try {
-      await API.put("/auth/password", { oldPassword, newPassword });
+      await API.put("/api/auth/password", { oldPassword, newPassword });
       setOldPassword("");
       setNewPassword("");
       setShowPassModal(false);
@@ -85,7 +85,7 @@ const Profile = () => {
       const formData = new FormData();
       formData.append("avatar", file);
 
-      const { data } = await API.put("/auth/profile/avatar", formData);
+      const { data } = await API.put("/api/auth/profile/avatar", formData);
 
       const newAvatar = data.avatar || data.user?.avatar;
       if (!newAvatar) throw new Error("Server did not return image URL");

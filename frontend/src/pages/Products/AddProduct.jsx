@@ -33,7 +33,7 @@ const AddProduct = () => {
         setAllProducts(data.products || []);
       } catch (err) {
         console.error("Failed to load prices", err);
-      }
+      } 
     };
     loadPrices();
   }, []);

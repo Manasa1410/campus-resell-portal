@@ -29,7 +29,7 @@ const ProductDetails = () => {
 
   const fetchProduct = async () => {
     try {
-      const { data } = await API.get(`/products/${id}`);
+      const { data } = await API.get(`/api/products/${id}`);
       setProduct(data.product);
       setSellerIsBanned(data.product.seller?.isBanned || false);
 
@@ -37,7 +37,7 @@ const ProductDetails = () => {
       const filtered = viewed.filter((p) => p._id !== data.product._id);
       localStorage.setItem("recentlyViewed", JSON.stringify([data.product, ...filtered].slice(0, 10)));
 
-      const { data: allData } = await API.get("/products");
+      const { data: allData } = await API.get("/api/products");
       const similar = allData.products.filter((p) => p.category === data.product.category && p._id !== id).slice(0, 4);
       setSimilarProducts(similar);
     } catch (err) {
@@ -98,7 +98,7 @@ const ProductDetails = () => {
     e.preventDefault();
     setSubmittingReview(true);
     try {
-      const { data } = await API.post(`/products/${id}/reviews`, { rating, comment });
+      const { data } = await API.post(`/api/products/${id}/reviews`, { rating, comment });
       toast.success("Review submitted");
       setComment("");
       setProduct((prev) => ({
@@ -117,7 +117,7 @@ const ProductDetails = () => {
   const handleToggleSellerBan = async () => {
     if (!window.confirm(`Are you sure you want to ${sellerIsBanned ? "unban" : "ban"} this seller?`)) return;
     try {
-      const { data } = await API.put(`/users/admin/ban/${product.seller._id}`);
+      const { data } = await API.put(`/api/users/admin/ban/${product.seller._id}`);
       toast.success(data.message);
       setSellerIsBanned(!sellerIsBanned);
     } catch (err) {

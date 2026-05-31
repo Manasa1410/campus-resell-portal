@@ -1,21 +1,21 @@
 import axios from "axios";
 
-const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
+// Always expect FULL API URL from env
+const API_BASE_URL =
+  import.meta.env.VITE_API_URL || "http://localhost:5001/api";
 
 // 🖼️ Base URL for images and static assets
 export const BACKEND_URL =
-  import.meta.env.VITE_BACKEND_URL || API_BASE_URL.replace(/\/api\/?$/, "");
+  import.meta.env.VITE_BACKEND_URL || "http://localhost:5001";
 
-// 🌐 Base URL of backend
+// 🌐 Axios instance
 const API = axios.create({
   baseURL: API_BASE_URL,
 });
 
-// 🔐 Automatically attach token to every request
+// 🔐 Attach token
 API.interceptors.request.use((req) => {
   const token = localStorage.getItem("token");
-
-  req.headers = req.headers || {};
 
   if (token) {
     req.headers.Authorization = `Bearer ${token}`;

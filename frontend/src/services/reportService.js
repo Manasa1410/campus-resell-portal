@@ -8,13 +8,13 @@ export const createReport = async (reportData) => {
 
 // 📋 Get all reports (Admin only)
 export const getReports = async () => {
-  const { data } = await API.get("/reports");
+  const { data } = await API.get("/reports/admin/all");
   return data;
 };
-
+  
 // 🔄 Update report status (Admin)
 export const updateReportStatus = async (id, status, adminNote = "") => {
-  const { data } = await API.put(`/reports/${id}`, { status, adminNote });
+  const { data } = await API.put(`/reports/status/${id}`, { status, adminNote });
   return data;
 };
 
