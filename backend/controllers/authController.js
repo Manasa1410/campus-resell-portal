@@ -3,8 +3,8 @@ import Product from "../models/productModel.js";
 import Otp from "../models/otpModel.js";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { saveUploadedImage } from "../config/cloudinaryUpload.js";
 import { sendWelcomeEmail, sendOTPEmail } from "../services/emailService.js";
-//import generateToken from "../utils/generateToken.js";
 import {
   validateRegisterInput,
   validateLoginInput,
@@ -18,6 +18,18 @@ import * as crypto from "crypto";
 import { generateToken } from "../utils/generateToken.js";
 
 const OTP_EXPIRY_MINUTES = Number(process.env.OTP_EXPIRY_MINUTES || 10);
+
+const formatImageUrl = (req, imagePath) => {
+  if (!imagePath || imagePath.startsWith("http")) return imagePath || "";
+
+  const configuredBackendUrl = (process.env.BACKEND_URL || "").replace(/\/api\/?$/, "").replace(/\/$/, "");
+  const host = req?.get("host") || "localhost:5001";
+  const hostUrl = configuredBackendUrl || (req ? `${req.protocol}://${host}` : `http://${host}`);
+
+  // For local files, ensure we don't double-prefix 'uploads/' and handle slashes
+  const cleanPath = imagePath.replace(/^.*uploads[/\\]/, "").replace(/^\/+/, "").replace(/\\/g, "/");
+  return `${hostUrl}/uploads/${cleanPath}`.replace(/([^:]\/)\/+/g, "$1"); // Normalize slashes
+};
 
 const generateOtp = () => crypto.randomInt(100000, 1000000).toString();
 
@@ -48,16 +60,18 @@ export const registerUser = async (req, res) => {
       });
     }
 
-     const avatar = req.file ? req.file.path : "";
-
     // Check if user exists
     const userExists = await User.findOne({ email: normalizedEmail });
-
     if (userExists) {
       return res.status(400).json({
         success: false,
         message: "User already exists",
       });
+    }
+
+    let avatar = "";
+    if (req.file) {
+      avatar = await saveUploadedImage(req.file, "campus_resell/avatars");
     }
 
     // Hash password
@@ -79,12 +93,15 @@ export const registerUser = async (req, res) => {
     // Send response
     res.status(201).json({
       success: true,
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar,
-      isAdmin: user.isAdmin,
-      isVerified: user.isVerified,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: formatImageUrl(req, user.avatar),
+        isAdmin: user.isAdmin,
+        isVerified: user.isVerified,
+        wishlist: user.wishlist || [],
+      },
       token: generateToken(user._id),
     });
   } catch (error) {
@@ -103,6 +120,7 @@ export const registerUser = async (req, res) => {
 export const loginUser = async (req, res) => {
   try {
     const { email, password } = req.body || {};
+    console.log('[auth] login attempt:', { email: email || null, ip: req.ip || req.headers['x-forwarded-for'] || req.get('host') });
     if (!email || !password) {
   return res.status(400).json({
     success: false,
@@ -150,11 +168,15 @@ export const loginUser = async (req, res) => {
 
     res.json({
       success: true,
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      isAdmin: user.isAdmin,
-      isVerified: user.isVerified,
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: formatImageUrl(req, user.avatar),
+        isAdmin: user.isAdmin,
+        isVerified: user.isVerified,
+        wishlist: user.wishlist || [],
+      },
       token: generateToken(user._id),
     });
   } catch (error) {
@@ -170,7 +192,7 @@ export const loginUser = async (req, res) => {
 //
 export const getProfile = async (req, res) => {
   try {
-    const user = await User.findById(req.user.id);
+    const user = await User.findById(req.user.id || req.user._id).select("+wishlist");
 
     if (!user) {
       return res.status(404).json({
@@ -188,17 +210,22 @@ export const getProfile = async (req, res) => {
 
     res.json({
       success: true,
-      _id: user._id,
-      name: user.name,
-      email: user.email,
-      avatar: user.avatar,
-      isAdmin: user.isAdmin,
-      isVerified: user.isVerified,
-      averageRating: user.averageRating,
-      totalReviews: user.totalReviews,
-      createdAt: user.createdAt,
-      trustScore: Number(trustScore),
-      totalListings: products.length
+      user: {
+        ...user.toObject(),
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        avatar: formatImageUrl(req, user.avatar),
+        isAdmin: user.isAdmin,
+        isVerified: user.isVerified,
+        averageRating: user.averageRating,
+        totalReviews: user.totalReviews,
+        createdAt: user.createdAt,
+        // Ensure wishlist is always an array of IDs for consistency
+        wishlist: user.wishlist ? user.wishlist.map(id => id.toString()) : [],
+        trustScore: Number(trustScore),
+        totalListings: products.length
+      }
     });
   } catch (error) {
     res.status(500).json({
@@ -230,7 +257,11 @@ export const updateProfile = async (req, res) => {
     }
 
     await user.save();
-    res.json({ success: true, message: "Profile updated successfully", user: { name: user.name, email: user.email } });
+    res.json({ 
+      success: true, 
+      message: "Profile updated successfully", 
+      user: { ...user.toObject(), avatar: formatImageUrl(req, user.avatar) } 
+    });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });
   }
@@ -265,16 +296,6 @@ export const updatePassword = async (req, res) => {
 
 export const updateAvatar = async (req, res) => {
   try {
-    // Find logged-in user
-    const user = await User.findById(req.user.id);
-
-    if (!user) {
-      return res.status(404).json({
-        success: false,
-        message: "User not found",
-      });
-    }
-
     // Check if file uploaded
     if (!req.file) {
       return res.status(400).json({
@@ -283,17 +304,28 @@ export const updateAvatar = async (req, res) => {
       });
     }
 
-    // Save file path
-    user.avatar = req.file.path;
+    const avatarPath = await saveUploadedImage(req.file, "campus_resell/avatars");
+    console.log(`[avatar] upload result for user=${req.user?.id || req.user?._id}: ${avatarPath}`);
+    const user = await User.findById(req.user.id || req.user._id);
+    
+    if (!user) return res.status(404).json({ success: false, message: "User not found" });
 
+    user.avatar = avatarPath;
     await user.save();
+    console.log(`[avatar] saved to DB for user=${user._id}: ${user.avatar}`);
+
+    const formattedAvatar = formatImageUrl(req, user.avatar);
 
     res.json({
       success: true,
       message: "Avatar updated successfully",
-      avatar: user.avatar,
+      avatar: formattedAvatar,
+      user: {
+        ...user.toObject({ virtuals: true }),
+        avatar: formattedAvatar,
+        wishlist: Array.isArray(user.wishlist) ? user.wishlist : [],
+      },
     });
-
   } catch (error) {
     res.status(500).json({
       success: false,
@@ -329,22 +361,24 @@ export const forgotPassword = async (req, res) => {
     user.resetPasswordExpire = Date.now() + 10 * 60 * 1000; // 10 mins
 
     await user.save();
-    
+
     try {
       await sendOTPEmail(user.email, otp);
-      console.log(`[OTP Success] Password reset OTP sent successfully to ${user.email}`);
-      res.json({
-        success: true,
-        message: "OTP sent to email",
-      });
-    } catch (emailError) {
-      console.error(`[SMTP Error] Failed to send password reset OTP to ${user.email}. Details:`, emailError.message);
-      res.status(500).json({
+    } catch (err) {
+      console.error(`[SMTP Error] Forgot password OTP send failed for ${user.email}:`, err.message);
+      user.resetPasswordToken = undefined;
+      user.resetPasswordExpire = undefined;
+      await user.save().catch(() => {});
+      return res.status(500).json({
         success: false,
-        message: "Failed to deliver verification code. Please check your SMTP mail server configuration.",
+        message: "Unable to send password reset OTP right now. Please try again later.",
       });
     }
 
+    return res.json({
+      success: true,
+      message: "OTP sent to email. Please check your inbox.",
+    });
   } catch (err) {
     res.status(500).json({
       success: false,
@@ -438,36 +472,37 @@ export const verifyResetOtp = async (req, res) => {
 export const requestEmailVerification = async (req, res) => {
   try {
     const { email } = req.body;
-    const targetEmail = (email || req.user.email).toLowerCase().trim();
+    const targetEmail = (email || req.user?.email || "").toLowerCase().trim();
 
-    if (!validateEmail(targetEmail)) {
+    if (!targetEmail || !validateEmail(targetEmail)) {
       return res.status(400).json({ success: false, message: "Use a valid email address" });
     }
 
     // Strict Educational Domain Check
-    if (!targetEmail.endsWith(".edu") && !targetEmail.endsWith(".edu.in")) {
+    if (!validateCollegeEmailDomain(targetEmail)) {
       return res.status(400).json({
         success: false,
-        message: "Access restricted. Only educational email addresses ending with .edu or .edu.in are allowed.",
+        message: "Access restricted. Use an educational email such as .edu, .edu.in, .ac.in, or a configured college domain.",
       });
     }
 
-    const user = await User.findById(req.user.id || req.user._id);
-    if (!user) {
+    const userId = req.user?.id || req.user?._id;
+    if (!userId) {
       return res.status(404).json({ success: false, message: "User not found" });
     }
 
-    const emailExists = await User.findOne({ email: targetEmail, _id: { $ne: user._id } });
+    const emailExists = await User.findOne({ email: targetEmail, _id: { $ne: userId } });
     if (emailExists) {
       return res.status(400).json({ success: false, message: "Email already in use" });
     }
 
     // Cooldown check (30 seconds resend cooldown)
-    const latestOtp = await Otp.findOne({ email: targetEmail }).sort({ createdAt: -1 });
+    const latestOtp = await Otp.findOne({ email: targetEmail }).sort({ _id: -1 });
     if (latestOtp) {
-      const timePassed = Date.now() - new Date(latestOtp.createdAt).getTime();
-      if (timePassed < 30 * 1000) {
-        const waitTime = Math.ceil((30 * 1000 - timePassed) / 1000);
+      const otpDate = latestOtp.createdAt || latestOtp._id.getTimestamp();
+      const diff = Date.now() - new Date(otpDate).getTime();
+      if (diff < 30 * 1000) {
+        const waitTime = Math.ceil((30 * 1000 - diff) / 1000);
         return res.status(429).json({
           success: false,
           message: `Please wait ${waitTime} seconds before requesting another OTP.`,
@@ -495,31 +530,32 @@ export const requestEmailVerification = async (req, res) => {
     const hashedOtp = await bcrypt.hash(otp, 10);
     const expiresAt = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes expiry
 
-    // Save to the Otp collection
-    await Otp.create({
+    // Create record first so it's ready for verification immediately
+    const otpRecord = await Otp.create({
       email: targetEmail,
       otp: hashedOtp,
       expiresAt,
     });
 
-    // Try sending email and return correct response status
+    // Send email and only return success if delivery is confirmed
     try {
       await sendOTPEmail(targetEmail, otp);
-      console.log(`[OTP Send Success] Successfully sent verification email to ${targetEmail}`);
-      return res.status(200).json({
-        success: true,
-        message: `Verification code sent to ${targetEmail}`,
-        expiresInMinutes: 10,
-      });
-    } catch (emailError) {
-      console.error(`[SMTP Send Error] Failed to send verification email to ${targetEmail}. Details:`, emailError.message);
+    } catch (err) {
+      console.error(`❌ [SMTP ERROR] Email verification OTP failed for ${targetEmail}:`, err.message);
+      await Otp.findByIdAndDelete(otpRecord._id).catch(() => {});
       return res.status(500).json({
         success: false,
-        message: "Failed to deliver verification code. Please check your SMTP mail server configuration.",
+        message: "Unable to send verification email right now. Please try again later.",
       });
     }
+
+    return res.status(200).json({
+      success: true,
+      message: `Verification code sent to ${targetEmail}`,
+      expiresInMinutes: 10,
+    });
   } catch (error) {
-    console.error("[OTP Send General Error]:", error.message);
+    console.error("❌ [OTP GENERAL ERROR]:", error.stack || error.message);
     return res.status(500).json({ success: false, message: error.message });
   }
 };
@@ -593,5 +629,7 @@ export const confirmEmailVerification = async (req, res) => {
   }
 };
 
+// Remove any duplicate definitions below this line. 
+// Ensure these aliases only point to the functions defined above.
 export const sendOtp = requestEmailVerification;
 export const verifyOtp = confirmEmailVerification;

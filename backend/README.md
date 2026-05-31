@@ -81,7 +81,13 @@ MONGO_URI=mongodb://127.0.0.1:27017/campus-resell
 JWT_SECRET=replace-with-a-secure-secret
 EMAIL_USER=your-smtp-user
 EMAIL_PASS=your-smtp-password
+CLOUDINARY_CLOUD_NAME=your-cloudinary-cloud-name
+CLOUDINARY_API_KEY=your-cloudinary-api-key
+CLOUDINARY_API_SECRET=your-cloudinary-api-secret
+BACKEND_URL=http://localhost:5001
 ```
+
+Cloudinary uploads are enabled automatically when the `CLOUDINARY_*` variables are set. If Cloudinary is not configured, the backend falls back to local storage in `/uploads`.
 
 ## Security Features
 

@@ -86,7 +86,7 @@ const ProductDetails = () => {
       setWishlisted(!wishlisted);
 
       if (user && setUser && data.wishlist) {
-        setUser(prev => ({ ...prev, wishlist: data.wishlist }));
+        setUser((prev) => ({ ...prev, wishlist: data.wishlist }));
       }
     } catch (err) {
       console.error(err);

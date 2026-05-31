@@ -3,22 +3,20 @@ import User from "../models/userModel.js";
 import Notification from "../models/notificationModel.js";
 import SavedSearch from "../models/savedSearchModel.js";
 import { getIO } from "../config/socket.js";
+import { saveUploadedImage } from "../config/cloudinaryUpload.js";
 
 const formatImageUrl = (req, imagePath) => {
   if (!imagePath) return imagePath;
 
-  const host = req.get("host") || "localhost:5001";
-  const hostUrl = `${req.protocol}://${host}`;
+  if (!imagePath || imagePath.startsWith("http")) return imagePath || "";
 
-  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
-    return imagePath.replace(/^https?:\/\/[^/]+/, hostUrl);
-  }
+  const configuredBackendUrl = (process.env.BACKEND_URL || "").replace(/\/api\/?$/, "").replace(/\/$/, "");
+  const host = req?.get("host") || "localhost:5001";
+  const hostUrl = configuredBackendUrl || (req ? `${req.protocol}://${host}` : `http://${host}`);
 
-  if (imagePath.startsWith("/")) {
-    return `${hostUrl}${imagePath}`;
-  }
-
-  return `${hostUrl}/uploads/${imagePath}`;
+  // For local files, ensure we don't double-prefix 'uploads/' and handle slashes
+  const cleanPath = imagePath.replace(/^.*uploads[/\\]/, "").replace(/^\/+/, "").replace(/\\/g, "/");
+  return `${hostUrl}/uploads/${cleanPath}`.replace(/([^:]\/)\/+/g, "$1"); // Normalize slashes
 };
 
 const formatImages = (req, images = []) => {
@@ -31,9 +29,16 @@ const formatImages = (req, images = []) => {
 export const createProduct = async (req, res) => {
   try {
     const { title, description, price, category, condition = "used", location = "" } = req.body;
-
-    const images = (req.files || []).map((file) => `/uploads/${file.filename}`);
-
+    
+    const imageUrls = [];
+    if (req.files && req.files.length > 0) {
+      for (const file of req.files) {
+        const saved = await saveUploadedImage(file, "campus_resell/products");
+        console.log(`[product.upload] saved image for user=${req.user?._id || req.user?.id}: ${saved}`);
+        imageUrls.push(saved);
+      }
+    }
+    
     const product = await Product.create({
       title,
       description,
@@ -41,7 +46,7 @@ export const createProduct = async (req, res) => {
       category,
       condition,
       location,
-      images,
+      images: imageUrls,
       seller: req.user._id || req.user.id,
     });
 
@@ -92,9 +97,15 @@ export const createProduct = async (req, res) => {
       console.error("Error dispatching saved search alerts:", searchErr);
     }
 
+    // Return product with formatted image URLs
+    const productObj = {
+      ...product.toObject(),
+      images: formatImages(req, product.images),
+    };
+
     res.status(201).json({
       success: true,
-      product,
+      product: productObj,
     });
   } catch (error) {
     res.status(500).json({
@@ -320,17 +331,28 @@ export const updateProduct = async (req, res) => {
     }
 
     // If new images are uploaded, update the images array
+    const imageUrls = [];
     if (req.files && req.files.length > 0) {
-      updateData.images = req.files.map((file) => `/uploads/${file.filename}`);
+      for (const file of req.files) {
+        const saved = await saveUploadedImage(file, "campus_resell/products");
+        console.log(`[product.update] saved image for user=${req.user?._id || req.user?.id}: ${saved}`);
+        imageUrls.push(saved);
+      }
+      updateData.images = imageUrls;
     }
 
     product = await Product.findByIdAndUpdate(req.params.id, updateData, {
       new: true,
     });
 
+    const productObj = {
+      ...product.toObject(),
+      images: formatImages(req, product.images),
+    };
+
     res.json({
       success: true,
-      product,
+      product: productObj,
     });
   } catch (error) {
     res.status(500).json({
@@ -506,9 +528,9 @@ export const toggleWishlist = async (req, res) => {
     const isWishlisted = user.wishlist.some((id) => id.toString() === productId.toString());
 
     if (isWishlisted) {
-      user.wishlist = user.wishlist.filter((id) => id.toString() !== productId.toString());
+      user.wishlist.pull(productId);
     } else {
-      user.wishlist.push(productId);
+      user.wishlist.addToSet(productId);
       
       // 🔔 Notify seller that someone added their product to wishlist
       if (product.seller.toString() !== userId.toString()) {
@@ -529,7 +551,7 @@ export const toggleWishlist = async (req, res) => {
     res.json({
       success: true,
       message: isWishlisted ? "Removed from wishlist" : "Added to wishlist",
-      wishlist: user.wishlist,
+      wishlist: user.wishlist.map(id => id.toString()),
     });
   } catch (error) {
     res.status(500).json({ success: false, message: error.message });

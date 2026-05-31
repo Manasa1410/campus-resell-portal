@@ -1,50 +1,95 @@
 import nodemailer from "nodemailer";
+import dotenv from "dotenv";
+import path from "path";
+import { fileURLToPath } from "url";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+dotenv.config({ path: path.join(__dirname, "..", ".env") });
 
 let cachedTransporter;
 
+const cleanValue = (value) => String(value || "").trim().replace(/^['"]|['"]$/g, "");
+const cleanSecret = (value) => cleanValue(value).replace(/\s+/g, "");
+
 const getMailConfig = () => {
-  if (process.env.SENDGRID_API_KEY) {
+  const sendgridApiKey = cleanSecret(process.env.SENDGRID_API_KEY);
+  const smtpUser = cleanValue(process.env.SMTP_USER);
+  const smtpPass = cleanSecret(process.env.SMTP_PASS);
+  const emailUser = cleanValue(process.env.EMAIL_USER);
+  const emailPass = cleanSecret(process.env.EMAIL_PASS);
+
+  if (sendgridApiKey) {
     return {
       provider: "sendgrid",
-      from: process.env.MAIL_FROM || process.env.EMAIL_FROM || "Campus Resell Portal <no-reply@campus-resell.local>",
+      account: "apikey",
+      from: cleanValue(process.env.MAIL_FROM || process.env.EMAIL_FROM) || "Campus Resell Portal <no-reply@campus-resell.local>",
       transport: {
         host: "smtp.sendgrid.net",
         port: Number(process.env.SMTP_PORT || 587),
         secure: false,
         auth: {
           user: "apikey",
-          pass: process.env.SENDGRID_API_KEY,
+          pass: sendgridApiKey,
         },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
       },
     };
   }
 
   if (process.env.SMTP_HOST) {
+    if (!smtpUser || !smtpPass) {
+      throw new Error("SMTP_HOST is set, but SMTP_USER or SMTP_PASS is missing.");
+    }
+
     return {
       provider: "smtp",
-      from: process.env.MAIL_FROM || process.env.EMAIL_FROM || process.env.SMTP_USER,
+      account: smtpUser,
+      from: cleanValue(process.env.MAIL_FROM || process.env.EMAIL_FROM) || smtpUser,
       transport: {
-        host: process.env.SMTP_HOST,
+        host: cleanValue(process.env.SMTP_HOST),
         port: Number(process.env.SMTP_PORT || 587),
         secure: String(process.env.SMTP_SECURE || "false") === "true",
         auth: {
-          user: process.env.SMTP_USER,
-          pass: process.env.SMTP_PASS,
+          user: smtpUser,
+          pass: smtpPass,
         },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
       },
     };
   }
 
-  if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
+  if (emailUser || emailPass) {
+    if (!emailUser || !emailPass) {
+      throw new Error("EMAIL_USER and EMAIL_PASS must both be set for Gmail SMTP.");
+    }
+
+    const emailPort = Number(process.env.EMAIL_PORT || 465);
+    const emailSecure = String(process.env.EMAIL_SECURE || (emailPort === 465 ? "true" : "false")) === "true";
+
     return {
       provider: "gmail",
-      from: process.env.MAIL_FROM || `"Campus Resell Portal" <${process.env.EMAIL_USER}>`,
+      account: emailUser,
+      from: cleanValue(process.env.MAIL_FROM || process.env.EMAIL_FROM) || `"Campus Resell Portal" <${emailUser}>`,
       transport: {
-        service: "gmail",
+        host: "smtp.gmail.com",
+        port: emailPort,
+        secure: emailSecure,
         auth: {
-          user: process.env.EMAIL_USER,
-          pass: process.env.EMAIL_PASS,
+          user: emailUser,
+          pass: emailPass,
         },
+        tls: {
+          rejectUnauthorized: false,
+        },
+        connectionTimeout: 10000,
+        greetingTimeout: 10000,
+        socketTimeout: 15000,
       },
     };
   }
@@ -60,7 +105,9 @@ const getTransporter = () => {
   const config = getMailConfig();
   cachedTransporter = nodemailer.createTransport(config.transport);
   cachedTransporter.provider = config.provider;
+  cachedTransporter.account = config.account;
   cachedTransporter.defaultFrom = config.from;
+  console.log(`[email] configured provider=${config.provider} account=${config.account || "n/a"} from=${config.from}`);
 
   // Proactively verify SMTP connection and log status
   cachedTransporter.verify((error, success) => {
@@ -76,6 +123,9 @@ const getTransporter = () => {
 
 export const sendEmail = async (to, subject, html) => {
   const transporter = getTransporter();
+  const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+
+  console.log(`[email] sending provider=${transporter.provider} to=${to} subject=${subject}`);
 
   try {
     const info = await transporter.sendMail({
@@ -83,13 +133,43 @@ export const sendEmail = async (to, subject, html) => {
       to,
       subject,
       html,
+      text,
     });
 
     console.log(`[email] sent provider=${transporter.provider} to=${to} messageId=${info.messageId || "n/a"}`);
     return info;
   } catch (error) {
-    console.error(`[email] failed provider=${transporter.provider} to=${to} code=${error.code || "n/a"} message=${error.message}`);
-    throw new Error(`Unable to send email right now: ${error.response || error.message}`);
+    const setupHint =
+      transporter.provider === "gmail" && ["EAUTH", "EENVELOPE"].includes(error.code)
+        ? " For Gmail/Google Workspace, use an app password and make sure the MAIL_FROM address matches the authenticated account."
+        : "";
+    console.error(
+      `[email] failed provider=${transporter.provider} account=${transporter.account || "n/a"} to=${to} code=${error.code || "n/a"} command=${error.command || "n/a"} responseCode=${error.responseCode || "n/a"} message=${error.message}`
+    );
+    throw new Error(`Unable to send email right now: ${error.response || error.message}${setupHint}`);
+  }
+};
+
+export const verifyEmailTransport = async () => {
+  try {
+    const transporter = getTransporter();
+    await new Promise((resolve, reject) => transporter.verify((error, success) => (error ? reject(error) : resolve(success))));
+    return {
+      success: true,
+      provider: transporter.provider,
+      account: transporter.account,
+      ready: true,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      provider: cachedTransporter?.provider || "unknown",
+      account: cachedTransporter?.account || "unknown",
+      ready: false,
+      error: error.message,
+      code: error.code || null,
+      responseCode: error.responseCode || null,
+    };
   }
 };
 

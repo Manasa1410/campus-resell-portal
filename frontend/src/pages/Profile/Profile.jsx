@@ -10,51 +10,39 @@ import Modal from "../../components/ui/Modal";
 import Icon from "../../components/ui/Icon";
 import SkeletonBlock from "../../components/ui/Skeleton";
 import useAuth from "../../hooks/useAuth";
-import OTPVerification from "../../components/OTPVerification";
+import { resolveMediaUrl, withCacheBust } from "../../utils/mediaUrl";
 
 const Profile = () => {
-  const [loading, setLoading] = useState(true);
-  const { user, setUser } = useAuth(); // Use user and setUser from AuthContext
+  const { user, setUser, loading: authLoading } = useAuth(); // Use user and setUser from AuthContext
   const [file, setFile] = useState(null);
   const [preview, setPreview] = useState(null);
   const [isEditing, setIsEditing] = useState(false);
   const [showPassModal, setShowPassModal] = useState(false);
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
+  const [name, setName] = useState(user?.name || "");
+  const [email, setEmail] = useState(user?.email || "");
   const [oldPassword, setOldPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [updating, setUpdating] = useState(false);
+  const [avatarVersion, setAvatarVersion] = useState(() => Date.now());
 
   const navigate = useNavigate();
-
-  const fetchProfileData = async () => { // Renamed to avoid conflict with global user state
-    try {
-      const { data } = await API.get("/auth/profile");
-      if (setUser) {
-        setUser(prev => ({ ...prev, ...data }));
-      }
-      setName(data.name || "");
-      setEmail(data.email || "");
-    } catch (err) {
-      console.error(err);
-      toast.error("Failed to load profile");
-      navigate("/login");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    fetchProfileData();
-  }, []);
 
   const handleImageChange = (e) => {
     const selectedFile = e.target.files[0];
     if (selectedFile) {
+      // Revoke existing preview URL to avoid memory leaks
+      if (preview) URL.revokeObjectURL(preview);
       setFile(selectedFile);
       setPreview(URL.createObjectURL(selectedFile));
     }
   };
+
+  // Cleanup preview URL on component unmount
+  useEffect(() => {
+    return () => {
+      if (preview) URL.revokeObjectURL(preview);
+    };
+  }, [preview]);
 
   const handleUpdateProfile = async (e) => {
     e.preventDefault();
@@ -98,17 +86,38 @@ const Profile = () => {
       formData.append("avatar", file);
 
       const { data } = await API.put("/auth/profile/avatar", formData);
-      setUser((prev) => ({ ...prev, avatar: data.avatar })); // Update global user state
-      setFile(null);
+
+      const newAvatar = data.avatar || data.user?.avatar;
+      if (!newAvatar) throw new Error("Server did not return image URL");
+
+      // Update state directly from response to avoid redundant GET request race conditions
+      setUser?.((prev) => ({
+        ...prev,
+        ...(data.user || {}),
+        avatar: newAvatar,
+        updatedAt: Date.now()
+      }));
+
       setPreview(null);
+      setFile(null);
+      setAvatarVersion(Date.now());
       toast.success("Profile image updated");
     } catch (err) {
       console.error(err);
-      toast.error("Failed to update image");
+      toast.error(err.response?.data?.message || err.message || "Failed to update image");
     }
   };
 
-  if (loading) {
+  useEffect(() => {
+    if (user) {
+      setName(user.name || "");
+      setEmail(user.email || "");
+    }
+  }, [user]);
+
+  const loading = authLoading; // Use the loading state from AuthContext
+
+  if (loading || !user) { // If AuthContext is still loading or user is not available yet
     return (
       <div className="mx-auto max-w-6xl space-y-6">
         <SkeletonBlock className="h-52" />
@@ -120,15 +129,19 @@ const Profile = () => {
     );
   }
 
-  if (!user && !loading) { // Check user only after loading is complete
-    return (
-      <Card className="p-8 text-center">
-        <p className="font-semibold text-red-600">User not found</p>
-      </Card>
-    );
-  }
+  const getAvatarSrc = (avatar) => {
+    if (preview) return preview;
+    if (!avatar) return "/default-avatar.svg";
 
-  const avatarSrc = preview || (user?.avatar ? `http://localhost:5001/${user.avatar}` : "/default-avatar.png");
+    // If the backend already provided a full URL (starting with http), 
+    // skip resolveMediaUrl to prevent double-prefixing the host.
+    const resolvedUrl = typeof avatar === "string" && avatar.startsWith("http")
+      ? avatar
+      : resolveMediaUrl(avatar, "/default-avatar.svg");
+
+    return withCacheBust(resolvedUrl, avatarVersion);
+  };
+
   const stats = [ // Ensure user is not null before accessing properties
     { label: "Products", value: user.totalListings ?? 0 },
     { label: "Wishlist", value: user.wishlist?.length ?? 0 },
@@ -150,7 +163,15 @@ const Profile = () => {
       <div className="grid gap-6 lg:grid-cols-[360px_1fr]">
         <Card className="p-6 text-center">
           <div className="relative mx-auto w-36">
-            <img src={avatarSrc} alt={user.name} className="h-36 w-36 rounded-full border-4 border-blue-50 object-cover shadow-lg dark:border-slate-800" />
+            <img
+              key={`avatar-${avatarVersion}`}
+              src={getAvatarSrc(user?.avatar)}
+              alt={user?.name}
+              onError={(event) => {
+                event.currentTarget.src = "/default-avatar.svg";
+              }}
+              className="h-36 w-36 rounded-full border-4 border-blue-50 object-cover shadow-lg dark:border-slate-800"
+            />
             <label className="absolute bottom-2 right-2 grid h-11 w-11 cursor-pointer place-items-center rounded-full bg-blue-600 text-white shadow-lg transition hover:scale-105 hover:bg-blue-700">
               <Icon name="edit" className="h-4 w-4" />
               <input type="file" accept="image/*" className="hidden" onChange={handleImageChange} />
@@ -161,11 +182,7 @@ const Profile = () => {
           <p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{user.email}</p>
           <div className="mt-3 flex justify-center gap-2 flex-wrap">
             <Badge tone={user.isAdmin ? "purple" : "blue"}>{user.isAdmin ? "Admin" : "Campus member"}</Badge>
-            {user.isVerified ? (
-              <Badge tone="available">✓ Verified Member</Badge>
-            ) : (
-              <Badge tone="red">Unverified Email</Badge>
-            )}
+            {user.isVerified && <Badge tone="available">✓ Verified Member</Badge>}
           </div>
 
           <div className="mt-4 flex justify-center gap-2">
@@ -261,15 +278,6 @@ const Profile = () => {
             </div>
           </Card>
 
-          {!user.isVerified && (
-            <OTPVerification
-              user={user}
-              onVerificationSuccess={(updatedUser) => {
-                setUser((prev) => ({ ...prev, ...updatedUser }));
-              }}
-            />
-          )}
-
           <div className="grid gap-4 sm:grid-cols-2">
             <Card as={Link} to="/my-products" hover className="p-6">
               <span className="mb-4 grid h-12 w-12 place-items-center rounded-xl bg-purple-50 text-purple-700 dark:bg-purple-950/40 dark:text-purple-200">
@@ -296,7 +304,7 @@ const Profile = () => {
             placeholder="Old password"
             value={oldPassword}
             onChange={(e) => setOldPassword(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 dark:border-slate-800 dark:bg-slate-100 dark:text-slate-950"
             required
           />
           <input
@@ -304,7 +312,7 @@ const Profile = () => {
             placeholder="New password"
             value={newPassword}
             onChange={(e) => setNewPassword(e.target.value)}
-            className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 dark:border-slate-800 dark:bg-slate-950 dark:text-white"
+            className="w-full rounded-xl border border-slate-200 bg-slate-50 p-3 text-sm text-slate-950 outline-none focus:border-blue-500 focus:ring-4 focus:ring-blue-100 dark:border-slate-800 dark:bg-slate-100 dark:text-slate-950"
             required
           />
           <Button type="submit" disabled={updating} className="w-full">

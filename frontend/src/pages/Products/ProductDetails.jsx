@@ -8,6 +8,7 @@ import useAuth from "../../hooks/useAuth";
 import ReportModal from "../../services/ReportModal";
 import Loader from "../../components/Loader";
 import ProductCard from "../../components/ProductCard";
+import { resolveMediaUrl } from "../../utils/mediaUrl";
 import { toast } from "react-hot-toast";
 
 const ProductDetails = () => {
@@ -94,7 +95,7 @@ const ProductDetails = () => {
       setWishlisted(!wishlisted);
 
       if (user && setUser && data.wishlist) {
-        setUser({ ...user, wishlist: data.wishlist });
+        setUser((prev) => ({ ...prev, wishlist: data.wishlist }));
       }
     } catch (err) {
       console.error(err);
@@ -182,7 +183,7 @@ const ProductDetails = () => {
           <div className="overflow-hidden rounded-3xl glass-panel shadow-2xl shadow-slate-900/5">
             <div className="relative grid aspect-4/3 place-items-center bg-slate-900/40">
               <img
-                src={product.images?.[currentImageIndex] || "/default-product.png"}
+                src={resolveMediaUrl(product.images?.[currentImageIndex], "/default-product.png")}
                 alt={product.title}
                 className="h-full w-full object-contain p-4"
               />
@@ -221,7 +222,7 @@ const ProductDetails = () => {
                     currentImageIndex === index ? "border-blue-600 shadow-md" : "border-transparent opacity-70 hover:opacity-100"
                   }`}
                 >
-                  <img src={img} alt={`${product.title} thumbnail ${index + 1}`} className="h-full w-full object-cover" />
+                  <img src={resolveMediaUrl(img, "/default-product.png")} alt={`${product.title} thumbnail ${index + 1}`} className="h-full w-full object-cover" />
                 </button>
               ))}
             </div>

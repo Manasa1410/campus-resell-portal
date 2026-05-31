@@ -1,21 +1,19 @@
 import Chat from "../models/chatModel.js";
 import Message from "../models/messageModel.js";
+import { saveUploadedImage } from "../config/cloudinaryUpload.js";
 
+// Standardized formatImageUrl function
 const formatImageUrl = (req, imagePath) => {
   if (!imagePath) return imagePath;
 
-  const host = req.get("host") || "localhost:5001";
-  const hostUrl = `${req.protocol}://${host}`;
+  if (imagePath.startsWith("http")) return imagePath;
+  const configuredBackendUrl = (process.env.BACKEND_URL || "").replace(/\/api\/?$/, "").replace(/\/$/, "");
+  const host = req?.get("host") || "localhost:5001";
+  const hostUrl = configuredBackendUrl || (req ? `${req.protocol}://${host}` : `http://${host}`);
 
-  if (imagePath.startsWith("http://") || imagePath.startsWith("https://")) {
-    return imagePath.replace(/^https?:\/\/[^/]+/, hostUrl);
-  }
-
-  if (imagePath.startsWith("/")) {
-    return `${hostUrl}${imagePath}`;
-  }
-
-  return `${hostUrl}/uploads/${imagePath}`;
+  // For local files, ensure we don't double-prefix 'uploads/'
+  const cleanPath = imagePath.replace(/^.*uploads[/\\]/, "");
+  return `${hostUrl}/uploads/${cleanPath}`;
 };
 
 const formatImages = (req, images = []) => {
@@ -243,7 +241,10 @@ export const uploadChatImage = async (req, res) => {
     if (!req.file) {
       return res.status(400).json({ success: false, message: "No image file provided" });
     }
-    const fileUrl = `/uploads/${req.file.filename}`;
+
+    // Upload to Cloudinary and cleanup local temp file
+    const fileUrl = await saveUploadedImage(req.file, "campus_resell/chat");
+
     res.json({
       success: true,
       fileUrl,

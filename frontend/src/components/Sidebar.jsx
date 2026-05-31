@@ -1,6 +1,6 @@
 import { Link, NavLink, useNavigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
-import { BACKEND_URL } from "../services/api";
+import { withCacheBust } from "../utils/mediaUrl";
 
 const icons = {
   dashboard: (
@@ -52,6 +52,10 @@ const Icon = ({ name }) => (
     {icons[name]}
   </svg>
 );
+
+const getAvatarSrc = (avatar, lastUpdated) => {
+  return withCacheBust(avatar, lastUpdated || "1");
+};
 
 const Sidebar = ({ collapsed, mobileOpen, onCloseMobile, onToggleCollapse }) => {
   const { user, logout } = useAuth();
@@ -153,8 +157,11 @@ const Sidebar = ({ collapsed, mobileOpen, onCloseMobile, onToggleCollapse }) => 
             <div className="border-t border-border pt-4">
               <div className={`mb-3 flex items-center gap-3 rounded-xl bg-muted/50 p-3 border border-border ${collapsed ? "lg:justify-center" : ""}`}>
                 <img
-                  src={user?.avatar ? `${BACKEND_URL}/${user.avatar}` : "/default-avatar.png"}
+                  src={getAvatarSrc(user?.avatar, user?.updatedAt)}
                   alt={user?.name || "User"}
+                  onError={(event) => {
+                    event.currentTarget.src = "/default-avatar.svg";
+                  }}
                   className="h-10 w-10 rounded-full border border-indigo-500/20 dark:border-indigo-500/30 object-cover"
                 />
                 <div className={`${collapsed ? "lg:hidden" : "block"} min-w-0`}>

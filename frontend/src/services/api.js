@@ -1,11 +1,14 @@
 import axios from "axios";
 
+const API_BASE_URL = import.meta.env.VITE_API_URL || "/api";
+
 // 🖼️ Base URL for images and static assets
-export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "";
+export const BACKEND_URL =
+  import.meta.env.VITE_BACKEND_URL || API_BASE_URL.replace(/\/api\/?$/, "");
 
 // 🌐 Base URL of backend
 const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || "/api",
+  baseURL: API_BASE_URL,
 });
 
 // 🔐 Automatically attach token to every request

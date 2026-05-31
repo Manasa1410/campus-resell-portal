@@ -1,11 +1,15 @@
 import { Link, useNavigate } from "react-router-dom";
 import useAuth from "../hooks/useAuth";
-import { BACKEND_URL } from "../services/api";
 import NotificationDropdown from "./NotificationDropdown";
+import { withCacheBust } from "../utils/mediaUrl";
 
 const Navbar = () => {
   const navigate = useNavigate();
   const { user, logout } = useAuth();
+
+  const getAvatarSrc = (avatar, lastUpdated) => {
+    return withCacheBust(avatar, lastUpdated || "1");
+  };
 
   const handleLogout = () => {
     logout();
@@ -47,12 +51,11 @@ const Navbar = () => {
         {/* ✅ SINGLE Avatar ONLY */}
         <Link to="/profile">
           <img
-            src={
-              user?.avatar
-                ? `${BACKEND_URL}/${user.avatar}`
-                : "/default-avatar.png"
-            }
+            src={getAvatarSrc(user?.avatar, user?.updatedAt)}
             alt="avatar"
+            onError={(event) => {
+              event.currentTarget.src = "/default-avatar.svg";
+            }}
             className="w-9 h-9 rounded-full object-cover border cursor-pointer"
           />
         </Link>

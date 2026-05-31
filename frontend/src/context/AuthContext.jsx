@@ -20,7 +20,7 @@ export const AuthProvider = ({ children }) => {
       }
 
       const { data } = await API.get("/auth/profile");
-      setUser(data);
+      setUser(data.user || data);
       // Connect socket after user is loaded
       socket.connect();
     } catch (err) {

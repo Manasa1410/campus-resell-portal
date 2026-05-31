@@ -5,6 +5,7 @@ import API from "../services/api";
 import Button from "./ui/Button";
 import Card from "./ui/Card";
 import Icon from "./ui/Icon";
+import { isValidEmail } from "../utils/emailValidation";
 
 const OTPVerification = ({ user, onVerificationSuccess }) => {
   const [email, setEmail] = useState(user?.email || "");
@@ -46,24 +47,24 @@ const OTPVerification = ({ user, onVerificationSuccess }) => {
   }, [cooldown, COOLDOWN_KEY]);
 
   const handleSendOTP = async (e) => {
-    e.preventDefault();
+    e?.preventDefault();
     const normalizedEmail = email.toLowerCase().trim();
 
-    if (!normalizedEmail.endsWith(".edu") && !normalizedEmail.endsWith(".edu.in")) {
-      toast.error("Only educational email addresses ending with .edu or .edu.in are allowed.");
+    if (!isValidEmail(normalizedEmail)) {
+      toast.error("Use a valid email address.");
       return;
     }
 
     setLoading(true);
     try {
-      const { data } = await API.post("/auth/send-otp", { email: normalizedEmail });
-      toast.success(data.message || "Verification code sent successfully!");
+      const response = await API.post("/auth/send-otp", { email: normalizedEmail });
       
       // Set 30 seconds cooldown
+      setStep(2);
       const cooldownEnd = Date.now() + 30 * 1000;
       localStorage.setItem(COOLDOWN_KEY, cooldownEnd.toString());
       setCooldown(30);
-      setStep(2);
+      toast.success(response.data?.message || "Verification code sent successfully!");
     } catch (err) {
       console.error(err);
       toast.error(err.response?.data?.message || "Failed to send verification code. Please try again.");
@@ -128,7 +129,7 @@ const OTPVerification = ({ user, onVerificationSuccess }) => {
           ) : (
             <form onSubmit={handleVerifyOTP} className="mt-4 space-y-4">
               <div className="rounded-lg bg-slate-50 dark:bg-slate-950 p-3 text-xs text-slate-600 dark:text-slate-400 border border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                <span className="truncate">Sending code to <b>{email}</b></span>
+                <span className="truncate">Code sent to <b>{email}</b></span>
                 <button
                   type="button"
                   onClick={() => setStep(1)}

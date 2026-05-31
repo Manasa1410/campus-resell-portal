@@ -3,12 +3,11 @@ import Card from "./ui/Card";
 import Badge from "./ui/Badge";
 import Button from "./ui/Button";
 import Icon from "./ui/Icon";
-import { BACKEND_URL } from "../services/api";
+import { resolveMediaUrl } from "../utils/mediaUrl";
 
 const getImageSrc = (src) => {
   if (!src) return "/default-product.png";
-  if (src.startsWith("http") || src.startsWith("/")) return src;
-  return `${BACKEND_URL}/${src}`;
+  return resolveMediaUrl(src, "/default-product.png");
 };
 
 const ProductCard = ({ product, onRemoveFromWishlist, onWishlistToggle }) => {

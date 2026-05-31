@@ -28,9 +28,7 @@ router.put("/password", protect, updatePassword);
 router.post("/forgot-password", forgotPassword);
 router.post("/verify-reset-otp", verifyResetOtp);
 router.put("/reset-password/:token", resetPassword);
-router.post("/send-otp", protect, sendOtp);
-router.post("/verify-otp", protect, verifyOtp);
-router.post("/verify-email/request", protect, requestEmailVerification);
-router.post("/verify-email/confirm", protect, confirmEmailVerification);
+router.post("/send-otp", protect, requestEmailVerification);
+router.post("/verify-otp", protect, confirmEmailVerification);
 
 export default router;

@@ -5,6 +5,7 @@ import { socket } from "../../sockets/socket";
 import { getChats, getMessages, deleteMessage, deleteChat, uploadChatImage } from "../../services/chatService";
 import ReportModal from "../../services/ReportModal";
 import { AuthContext } from "../../context/AuthContext";
+import { resolveMediaUrl } from "../../utils/mediaUrl";
 import { toast } from "react-hot-toast";
 
 const ChatSkeleton = () => (
@@ -364,7 +365,7 @@ const ChatPage = () => {
                 }`}
               >
                 <img
-                  src={chat.product?.images?.[0] || "/default-product.png"}
+                  src={resolveMediaUrl(chat.product?.images?.[0], "/default-product.png")}
                   alt={chat.product?.title || "Product"}
                   className="h-12 w-12 rounded-xl border border-white/70 object-cover shadow-sm"
                 />
@@ -390,7 +391,7 @@ const ChatPage = () => {
           {activeChat ? (
             <div className="flex min-w-0 items-center gap-3">
               <img
-                src={activeChat.product?.images?.[0] || "/default-product.png"}
+                src={resolveMediaUrl(activeChat.product?.images?.[0], "/default-product.png")}
                 alt={activeChat.product?.title || "Product"}
                 className="h-12 w-12 rounded-xl object-cover shadow-sm"
               />

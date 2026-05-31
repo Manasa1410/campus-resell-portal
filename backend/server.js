@@ -15,8 +15,6 @@ import app from "./app.js";
 import { initSocket } from "./config/socket.js";
 
 import authRoutes from "./routes/authRoutes.js";
-import { sendOtp, verifyOtp } from "./controllers/authController.js";
-import { protect } from "./middleware/authMiddleware.js";
 import productRoutes from "./routes/productRoutes.js";
 import chatRoutes from "./routes/chatRoutes.js";
 import reportRoutes from "./routes/reportRoutes.js";
@@ -25,6 +23,7 @@ import sellerReviewRoutes from "./routes/sellerReviewRoutes.js";
 import savedSearchRoutes from "./routes/savedSearchRoutes.js";
 
 import userRoutes from "./routes/userRoutes.js";
+import healthRoutes from "./routes/healthRoutes.js";
 
 //
 // 🗄️ Connect DB
@@ -36,14 +35,13 @@ await connectDB();
 // 🔗 Routes
 //
 app.use("/api/auth", authRoutes);
-app.post("/api/send-otp", protect, sendOtp);
-app.post("/api/verify-otp", protect, verifyOtp);
 app.use("/api/products", productRoutes);
 app.use("/api/chats", chatRoutes);
 app.use("/api/reports", reportRoutes);
 app.use("/api/notifications", notificationRoutes);
 app.use("/api/seller-reviews", sellerReviewRoutes);
 app.use("/api/saved-searches", savedSearchRoutes);
+app.use("/api/health", healthRoutes);
 
 app.use("/api/users", userRoutes);
 
@@ -88,4 +86,21 @@ const PORT = process.env.PORT || 5001;
 
 server.listen(PORT, () => {
   console.log(`🚀 Server started on port ${PORT}`);
+}).on('error', (err) => {
+  if (err.code === 'EADDRINUSE') {
+    console.error(`❌ Port ${PORT} is already in use. Run 'npx kill-port ${PORT}' and try again.`);
+    process.exit(1);
+  }
 });
+
+// Environment checks (non-blocking): warn about missing optional/important env vars
+(() => {
+  const missing = [];
+  if (!process.env.CLOUDINARY_CLOUD_NAME && !process.env.CLOUD_NAME) missing.push('CLOUDINARY_CLOUD_NAME');
+  if (!process.env.CLOUDINARY_API_KEY && !process.env.API_KEY) missing.push('CLOUDINARY_API_KEY');
+  if (!process.env.CLOUDINARY_API_SECRET && !process.env.API_SECRET) missing.push('CLOUDINARY_API_SECRET');
+
+  if (missing.length > 0) {
+    console.warn(`⚠️  Missing env vars: ${missing.join(', ')}. Cloudinary will be disabled and uploads will be stored locally as a fallback.`);
+  }
+})();

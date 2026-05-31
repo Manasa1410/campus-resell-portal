@@ -4,13 +4,7 @@ import Loader from "../../components/Loader";
 import { Link } from "react-router-dom";
 import { toast } from "react-hot-toast";
 import useAuth from "../../hooks/useAuth";
-import { BACKEND_URL } from "../../services/api";
-
-const getImageSrc = (src) => {
-  if (!src) return "/default-product.png";
-  if (src.startsWith("http") || src.startsWith("/")) return src;
-  return `${BACKEND_URL}/${src}`;
-};
+import { resolveMediaUrl } from "../../utils/mediaUrl";
 
 const MyProducts = () => {
   const [products, setProducts] = useState([]);
@@ -80,7 +74,7 @@ const MyProducts = () => {
             <div key={product._id} className="glass-panel rounded-2xl overflow-hidden shadow-2xl transition hover:border-accent-indigo/30">
               <div className="relative overflow-hidden bg-slate-800">
                 <img 
-                  src={getImageSrc(product.images?.[0])} 
+                  src={resolveMediaUrl(product.images?.[0], "/default-product.png")} 
                   alt={product.title} 
                   className="w-full h-48 object-cover transition duration-300 hover:scale-105" 
                 />
