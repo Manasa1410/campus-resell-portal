@@ -28,13 +28,14 @@ const generateOtp = () => crypto.randomInt(100000, 1000000).toString();
 const hashOtp = (otp) => crypto.createHash("sha256").update(String(otp)).digest("hex");
 
 // Multer middleware for avatar upload
-const uploadAvatar = upload.single('avatar'); // 'upload' is now the multer instance
+export const uploadAvatar = upload.single('avatar'); // Export this to use in routes
 
 //
 // 📝 Register User
 //
 export const registerUser = async (req, res) => {
   try {
+    console.log("[auth] register req.file:", req.file); // Debugging
     const { name, email, password } = req.body;
     const normalizedEmail = email.toLowerCase().trim();
 
@@ -286,15 +287,16 @@ export const updatePassword = async (req, res) => {
 
 export const updateAvatar = async (req, res) => { // This function needs to be wrapped by uploadAvatar middleware in the route definition
   try {
+    console.log("[avatar] req.file received:", req.file); // Debugging log
+
     // Check if file uploaded
-    if (!req.file || !req.file.path) { // req.file.path will be the secure_url from Cloudinary
+    if (!req.file) {
       return res.status(400).json({
         success: false,
         message: "No image uploaded",
       });
     }
 
-    console.log(`[avatar] upload result for user=${req.user?.id || req.user?._id}: ${req.file.path}`);
     const user = await User.findById(req.user.id || req.user._id);
     
     if (!user) return res.status(404).json({ success: false, message: "User not found" });
