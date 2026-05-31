@@ -7,6 +7,8 @@ const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.join(__dirname, ".env") });
 
+import express from "express";
+import fs from "fs";
 import http from "http";
 import connectDB from "./config/db.js";
 import app from "./app.js";
@@ -27,7 +29,7 @@ import userRoutes from "./routes/userRoutes.js";
 //
 // 🗄️ Connect DB
 //
- await connectDB();
+await connectDB();
 
 
 //
@@ -45,6 +47,27 @@ app.use("/api/saved-searches", savedSearchRoutes);
 
 app.use("/api/users", userRoutes);
 
+// Serve frontend statically only in local development
+const frontendBuildPath = path.join(__dirname, "..", "frontend", "dist");
+const isLocalDev = process.env.NODE_ENV !== "production";
+const hasFrontendBuild = fs.existsSync(frontendBuildPath);
+
+if (isLocalDev && hasFrontendBuild) {
+  app.use(express.static(frontendBuildPath));
+
+  // Any route that doesn't match backend endpoints should serve frontend
+  app.get(/.*/, (req, res) => {
+    if (req.originalUrl.startsWith("/api") || req.originalUrl.startsWith("/uploads")) {
+      return res.status(404).json({ success: false, message: "Not Found" });
+    }
+    res.sendFile(path.join(frontendBuildPath, "index.html"));
+  });
+} else {
+  // Production: just serve API message (frontend is on Vercel)
+  app.get("/", (req, res) => {
+    res.send("🚀 Campus Resell Portal API is running...");
+  });
+}
 
 
 

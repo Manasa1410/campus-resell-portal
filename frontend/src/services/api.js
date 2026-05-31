@@ -1,11 +1,11 @@
 import axios from "axios";
 
 // 🖼️ Base URL for images and static assets
-export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "https://campus-resell-portal-2.onrender.com";
+export const BACKEND_URL = import.meta.env.VITE_BACKEND_URL || "";
 
 // 🌐 Base URL of backend
 const API = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || `${BACKEND_URL}/api`,
+  baseURL: import.meta.env.VITE_API_URL || "/api",
 });
 
 // 🔐 Automatically attach token to every request
