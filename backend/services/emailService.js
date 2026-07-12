@@ -24,6 +24,16 @@ const maskAccount = (account) => {
   const visible = localPart.slice(0, 2);
   return `${visible}${"*".repeat(Math.max(localPart.length - 2, 3))}@${domain}`;
 };
+const parseFromAddress = (from) => {
+  const value = cleanValue(from);
+  const match = value.match(/^(.*)<([^<>]+)>$/);
+
+  if (!match) return { email: value };
+
+  const name = cleanValue(match[1]);
+  const email = cleanValue(match[2]);
+  return name ? { email, name } : { email };
+};
 const getEnvValue = (...names) => {
   for (const name of names) {
     const value = process.env[name];
@@ -49,6 +59,8 @@ const getMailConfig = () => {
       provider: "sendgrid",
       account: "apikey",
       from: mailFrom || "Campus Resell Portal <no-reply@campus-resell.local>",
+      apiKey: sendgridApiKey,
+      sendViaApi: true,
       transport: {
         host: "smtp.sendgrid.net",
         port: smtpPort || 587,
@@ -127,11 +139,26 @@ const getTransporter = () => {
   if (cachedTransporter) return cachedTransporter;
 
   const config = getMailConfig();
+  if (config.sendViaApi) {
+    cachedTransporter = {
+      provider: config.provider,
+      account: config.account,
+      maskedAccount: maskAccount(config.account),
+      defaultFrom: config.from,
+      apiKey: config.apiKey,
+      sendViaApi: true,
+    };
+    console.log(`[email] configured provider=${config.provider}-api account=${cachedTransporter.maskedAccount || "n/a"}`);
+    return cachedTransporter;
+  }
+
   cachedTransporter = nodemailer.createTransport(config.transport);
   cachedTransporter.provider = config.provider;
   cachedTransporter.account = config.account;
   cachedTransporter.maskedAccount = maskAccount(config.account);
   cachedTransporter.defaultFrom = config.from;
+  cachedTransporter.apiKey = config.apiKey;
+  cachedTransporter.sendViaApi = config.sendViaApi;
   console.log(`[email] configured provider=${config.provider} account=${cachedTransporter.maskedAccount || "n/a"}`);
 
   // Proactively verify SMTP connection and log status
@@ -151,6 +178,34 @@ export const sendEmail = async (to, subject, html) => {
   const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 
   console.log(`[email] sending provider=${transporter.provider} to=${to} subject=${subject}`);
+
+  if (transporter.provider === "sendgrid" && transporter.sendViaApi) {
+    const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${transporter.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        personalizations: [{ to: [{ email: to }] }],
+        from: parseFromAddress(transporter.defaultFrom),
+        subject,
+        content: [
+          { type: "text/plain", value: text },
+          { type: "text/html", value: html },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[email] failed provider=sendgrid-api to=${to} status=${response.status} message=${errorText}`);
+      throw new Error(`Unable to send email right now: SendGrid API returned ${response.status}`);
+    }
+
+    console.log(`[email] sent provider=sendgrid-api to=${to}`);
+    return { messageId: response.headers.get("x-message-id") || undefined };
+  }
 
   try {
     const info = await transporter.sendMail({
@@ -178,6 +233,16 @@ export const sendEmail = async (to, subject, html) => {
 export const verifyEmailTransport = async () => {
   try {
     const transporter = getTransporter();
+    if (transporter.sendViaApi) {
+      return {
+        success: true,
+        provider: `${transporter.provider}-api`,
+        account: transporter.maskedAccount,
+        accountConfigured: Boolean(transporter.apiKey),
+        ready: true,
+      };
+    }
+
     await new Promise((resolve, reject) => transporter.verify((error, success) => (error ? reject(error) : resolve(success))));
     return {
       success: true,
