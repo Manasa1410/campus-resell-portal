@@ -329,7 +329,7 @@ export const updateAvatar = async (req, res) => { // This function needs to be w
 export const forgotPassword = async (req, res) => {
   try {
     const { email } = req.body;
-    const normalizedEmail = email?.toLowerCase().trim();
+    const normalizedEmail = String(email || "").toLowerCase().trim();
 
     if (!validateEmail(normalizedEmail)) {
       return res.status(400).json({ success: false, message: "Use a valid email address" });
@@ -360,9 +360,14 @@ export const forgotPassword = async (req, res) => {
       user.resetPasswordToken = undefined;
       user.resetPasswordExpire = undefined;
       await user.save().catch(() => {});
+
+      const errorMessage = process.env.NODE_ENV === "production"
+        ? "Unable to send password reset OTP right now. Please try again later."
+        : err.message || "Unable to send password reset OTP right now.";
+
       return res.status(500).json({
         success: false,
-        message: "Unable to send password reset OTP right now. Please try again later.",
+        message: errorMessage,
       });
     }
 

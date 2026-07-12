@@ -79,15 +79,31 @@ Create `backend/.env`:
 PORT=5001
 MONGO_URI=mongodb://127.0.0.1:27017/campus-resell
 JWT_SECRET=replace-with-a-secure-secret
-EMAIL_USER=your-smtp-user
-EMAIL_PASS=your-smtp-password
 CLOUDINARY_CLOUD_NAME=your-cloudinary-cloud-name
 CLOUDINARY_API_KEY=your-cloudinary-api-key
 CLOUDINARY_API_SECRET=your-cloudinary-api-secret
 BACKEND_URL=http://localhost:5001
+
+# Preferred: SendGrid SMTP through Nodemailer
+SENDGRID_API_KEY=SG.xxxxx
+MAIL_FROM="Campus Resell Portal <no-reply@yourdomain.edu>"
+
+# Alternative: generic SMTP
+# SMTP_HOST=smtp.your-provider.com
+# SMTP_PORT=587
+# SMTP_SECURE=false
+# SMTP_USER=your-smtp-user
+# SMTP_PASS=your-smtp-password
+
+# Alternative: Gmail or Google Workspace app password
+# EMAIL_USER=your.email@gmail.com
+# EMAIL_PASS=your-16-character-app-password
+# MAIL_FROM="Campus Resell Portal <your.email@gmail.com>"
 ```
 
 Cloudinary uploads are enabled automatically when the `CLOUDINARY_*` variables are set. If Cloudinary is not configured, the backend falls back to local storage in `/uploads`.
+
+For deployed OTP/reset emails, configure the same email variables in the hosting provider environment. Local `backend/.env` values are ignored by Render unless you add them in the Render dashboard. You can check email readiness at `GET /api/health/email`; a healthy response returns `ready: true`.
 
 ## Security Features
 

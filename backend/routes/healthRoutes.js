@@ -20,6 +20,7 @@ router.get("/email", async (req, res) => {
     email: {
       provider: status.provider,
       account: status.account,
+      accountConfigured: status.accountConfigured,
       ready: status.ready,
       error: status.success ? undefined : status.error,
       code: status.success ? undefined : status.code,

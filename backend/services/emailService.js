@@ -1,5 +1,6 @@
 import nodemailer from "nodemailer";
 import dotenv from "dotenv";
+import dns from "dns";
 import path from "path";
 import { fileURLToPath } from "url";
 
@@ -7,27 +8,50 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 dotenv.config({ path: path.join(__dirname, "..", ".env") });
+dns.setDefaultResultOrder("ipv4first");
 
 let cachedTransporter;
 
 const cleanValue = (value) => String(value || "").trim().replace(/^['"]|['"]$/g, "");
 const cleanSecret = (value) => cleanValue(value).replace(/\s+/g, "");
+const maskAccount = (account) => {
+  const value = cleanValue(account);
+  if (!value || value === "apikey") return value;
+
+  const [localPart, domain] = value.split("@");
+  if (!domain) return "configured";
+
+  const visible = localPart.slice(0, 2);
+  return `${visible}${"*".repeat(Math.max(localPart.length - 2, 3))}@${domain}`;
+};
+const getEnvValue = (...names) => {
+  for (const name of names) {
+    const value = process.env[name];
+    if (typeof value === "string" && value.trim()) {
+      return value;
+    }
+  }
+  return "";
+};
 
 const getMailConfig = () => {
-  const sendgridApiKey = cleanSecret(process.env.SENDGRID_API_KEY);
-  const smtpUser = cleanValue(process.env.SMTP_USER);
-  const smtpPass = cleanSecret(process.env.SMTP_PASS);
-  const emailUser = cleanValue(process.env.EMAIL_USER);
-  const emailPass = cleanSecret(process.env.EMAIL_PASS);
+  const sendgridApiKey = cleanSecret(getEnvValue("SENDGRID_API_KEY", "SENDGRID_KEY"));
+  const smtpHost = cleanValue(getEnvValue("SMTP_HOST", "EMAIL_HOST", "MAIL_HOST"));
+  const smtpPort = Number(getEnvValue("SMTP_PORT", "EMAIL_PORT", "MAIL_PORT") || 587);
+  const smtpUser = cleanValue(getEnvValue("SMTP_USER", "SMTP_USERNAME", "EMAIL_USER", "MAIL_USERNAME", "GMAIL_USER"));
+  const smtpPass = cleanSecret(getEnvValue("SMTP_PASS", "SMTP_PASSWORD", "EMAIL_PASS", "MAIL_PASSWORD", "GMAIL_PASS"));
+  const mailFrom = cleanValue(getEnvValue("MAIL_FROM", "EMAIL_FROM", "SMTP_FROM"));
+  const emailPort = Number(getEnvValue("EMAIL_PORT", "MAIL_PORT") || 465);
+  const emailSecure = String(getEnvValue("EMAIL_SECURE", "MAIL_SECURE") || (emailPort === 465 ? "true" : "false")) === "true";
 
   if (sendgridApiKey) {
     return {
       provider: "sendgrid",
       account: "apikey",
-      from: cleanValue(process.env.MAIL_FROM || process.env.EMAIL_FROM) || "Campus Resell Portal <no-reply@campus-resell.local>",
+      from: mailFrom || "Campus Resell Portal <no-reply@campus-resell.local>",
       transport: {
         host: "smtp.sendgrid.net",
-        port: Number(process.env.SMTP_PORT || 587),
+        port: smtpPort || 587,
         secure: false,
         auth: {
           user: "apikey",
@@ -36,23 +60,24 @@ const getMailConfig = () => {
         connectionTimeout: 10000,
         greetingTimeout: 10000,
         socketTimeout: 15000,
+        family: 4,
       },
     };
   }
 
-  if (process.env.SMTP_HOST) {
+  if (smtpHost) {
     if (!smtpUser || !smtpPass) {
-      throw new Error("SMTP_HOST is set, but SMTP_USER or SMTP_PASS is missing.");
+      throw new Error("SMTP_HOST is set, but SMTP credentials are missing.");
     }
 
     return {
       provider: "smtp",
       account: smtpUser,
-      from: cleanValue(process.env.MAIL_FROM || process.env.EMAIL_FROM) || smtpUser,
+      from: mailFrom || smtpUser,
       transport: {
-        host: cleanValue(process.env.SMTP_HOST),
-        port: Number(process.env.SMTP_PORT || 587),
-        secure: String(process.env.SMTP_SECURE || "false") === "true",
+        host: smtpHost,
+        port: smtpPort || 587,
+        secure: String(getEnvValue("SMTP_SECURE", "EMAIL_SECURE", "MAIL_SECURE") || "false") === "true",
         auth: {
           user: smtpUser,
           pass: smtpPass,
@@ -60,29 +85,27 @@ const getMailConfig = () => {
         connectionTimeout: 10000,
         greetingTimeout: 10000,
         socketTimeout: 15000,
+        family: 4,
       },
     };
   }
 
-  if (emailUser || emailPass) {
-    if (!emailUser || !emailPass) {
-      throw new Error("EMAIL_USER and EMAIL_PASS must both be set for Gmail SMTP.");
+  if (smtpUser || smtpPass) {
+    if (!smtpUser || !smtpPass) {
+      throw new Error("SMTP credentials must include both username and password.");
     }
-
-    const emailPort = Number(process.env.EMAIL_PORT || 465);
-    const emailSecure = String(process.env.EMAIL_SECURE || (emailPort === 465 ? "true" : "false")) === "true";
 
     return {
       provider: "gmail",
-      account: emailUser,
-      from: cleanValue(process.env.MAIL_FROM || process.env.EMAIL_FROM) || `"Campus Resell Portal" <${emailUser}>`,
+      account: smtpUser,
+      from: mailFrom || `"Campus Resell Portal" <${smtpUser}>`,
       transport: {
         host: "smtp.gmail.com",
         port: emailPort,
         secure: emailSecure,
         auth: {
-          user: emailUser,
-          pass: emailPass,
+          user: smtpUser,
+          pass: smtpPass,
         },
         tls: {
           rejectUnauthorized: false,
@@ -90,12 +113,13 @@ const getMailConfig = () => {
         connectionTimeout: 10000,
         greetingTimeout: 10000,
         socketTimeout: 15000,
+        family: 4,
       },
     };
   }
 
   throw new Error(
-    "Email is not configured. Set SENDGRID_API_KEY, or SMTP_HOST/SMTP_USER/SMTP_PASS, or EMAIL_USER/EMAIL_PASS."
+    "Email is not configured. Set SENDGRID_API_KEY, or SMTP_HOST/SMTP credentials, or EMAIL_USER/EMAIL_PASS."
   );
 };
 
@@ -106,8 +130,9 @@ const getTransporter = () => {
   cachedTransporter = nodemailer.createTransport(config.transport);
   cachedTransporter.provider = config.provider;
   cachedTransporter.account = config.account;
+  cachedTransporter.maskedAccount = maskAccount(config.account);
   cachedTransporter.defaultFrom = config.from;
-  console.log(`[email] configured provider=${config.provider} account=${config.account || "n/a"} from=${config.from}`);
+  console.log(`[email] configured provider=${config.provider} account=${cachedTransporter.maskedAccount || "n/a"}`);
 
   // Proactively verify SMTP connection and log status
   cachedTransporter.verify((error, success) => {
@@ -144,7 +169,7 @@ export const sendEmail = async (to, subject, html) => {
         ? " For Gmail/Google Workspace, use an app password and make sure the MAIL_FROM address matches the authenticated account."
         : "";
     console.error(
-      `[email] failed provider=${transporter.provider} account=${transporter.account || "n/a"} to=${to} code=${error.code || "n/a"} command=${error.command || "n/a"} responseCode=${error.responseCode || "n/a"} message=${error.message}`
+      `[email] failed provider=${transporter.provider} account=${transporter.maskedAccount || "n/a"} to=${to} code=${error.code || "n/a"} command=${error.command || "n/a"} responseCode=${error.responseCode || "n/a"} message=${error.message}`
     );
     throw new Error(`Unable to send email right now: ${error.response || error.message}${setupHint}`);
   }
@@ -157,14 +182,16 @@ export const verifyEmailTransport = async () => {
     return {
       success: true,
       provider: transporter.provider,
-      account: transporter.account,
+      account: transporter.maskedAccount,
+      accountConfigured: Boolean(transporter.account),
       ready: true,
     };
   } catch (error) {
     return {
       success: false,
       provider: cachedTransporter?.provider || "unknown",
-      account: cachedTransporter?.account || "unknown",
+      account: cachedTransporter?.maskedAccount || "unknown",
+      accountConfigured: Boolean(cachedTransporter?.account),
       ready: false,
       error: error.message,
       code: error.code || null,
