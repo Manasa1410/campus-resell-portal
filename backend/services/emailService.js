@@ -41,7 +41,7 @@ const getMailConfig = () => {
   const smtpUser = cleanValue(getEnvValue("SMTP_USER", "SMTP_USERNAME", "EMAIL_USER", "MAIL_USERNAME", "GMAIL_USER"));
   const smtpPass = cleanSecret(getEnvValue("SMTP_PASS", "SMTP_PASSWORD", "EMAIL_PASS", "MAIL_PASSWORD", "GMAIL_PASS"));
   const mailFrom = cleanValue(getEnvValue("MAIL_FROM", "EMAIL_FROM", "SMTP_FROM"));
-  const emailPort = Number(getEnvValue("EMAIL_PORT", "MAIL_PORT") || 465);
+  const emailPort = Number(getEnvValue("EMAIL_PORT", "MAIL_PORT") || 587);
   const emailSecure = String(getEnvValue("EMAIL_SECURE", "MAIL_SECURE") || (emailPort === 465 ? "true" : "false")) === "true";
 
   if (sendgridApiKey) {
