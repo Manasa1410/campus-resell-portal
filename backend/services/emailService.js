@@ -55,8 +55,9 @@ const resolveIPv4 = async (hostname) => {
 };
 
 const getMailConfig = async () => {
-  const sendgridApiKey = cleanSecret(getEnvValue("SENDGRID_API_KEY", "SENDGRID_KEY"));
   const resendApiKey = cleanSecret(getEnvValue("RESEND_API_KEY", "RESEND_KEY"));
+  const brevoApiKey = cleanSecret(getEnvValue("BREVO_API_KEY", "SENDINBLUE_API_KEY", "BREVO_KEY"));
+  const sendgridApiKey = cleanSecret(getEnvValue("SENDGRID_API_KEY", "SENDGRID_KEY"));
   const smtpHost = cleanValue(getEnvValue("SMTP_HOST", "EMAIL_HOST", "MAIL_HOST"));
   const smtpPort = Number(getEnvValue("SMTP_PORT", "EMAIL_PORT", "MAIL_PORT") || 587);
   const smtpUser = cleanValue(getEnvValue("SMTP_USER", "SMTP_USERNAME", "EMAIL_USER", "MAIL_USERNAME", "GMAIL_USER"));
@@ -69,6 +70,16 @@ const getMailConfig = async () => {
       account: "apikey",
       from: mailFrom || "Campus Resell Portal <onboarding@resend.dev>",
       apiKey: resendApiKey,
+      sendViaApi: true,
+    };
+  }
+
+  if (brevoApiKey) {
+    return {
+      provider: "brevo",
+      account: "apikey",
+      from: mailFrom || `"Campus Resell Portal" <${smtpUser || "no-reply@campus-resell.com"}>`,
+      apiKey: brevoApiKey,
       sendViaApi: true,
     };
   }
@@ -241,6 +252,35 @@ export const sendEmail = async (to, subject, html) => {
 
     console.log(`[email] sent provider=resend-api to=${to}`);
     return { messageId: response.headers.get("x-message-id") || undefined };
+  }
+
+  if (transporter.provider === "brevo" && transporter.sendViaApi) {
+    const fromObj = parseFromAddress(transporter.defaultFrom);
+    const response = await fetch("https://api.brevo.com/v3/smtp/email", {
+      method: "POST",
+      headers: {
+        "api-key": transporter.apiKey,
+        "Content-Type": "application/json",
+        "Accept": "application/json",
+      },
+      body: JSON.stringify({
+        sender: { name: fromObj.name || "Campus Resell Portal", email: fromObj.email },
+        to: [{ email: to }],
+        subject,
+        htmlContent: html,
+        textContent: text,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[email] failed provider=brevo-api to=${to} status=${response.status} message=${errorText}`);
+      throw new Error(`Unable to send email right now: Brevo API returned ${response.status}`);
+    }
+
+    console.log(`[email] sent provider=brevo-api to=${to}`);
+    const resData = await response.json().catch(() => ({}));
+    return { messageId: resData.messageId || undefined };
   }
 
   if (transporter.provider === "sendgrid" && transporter.sendViaApi) {
