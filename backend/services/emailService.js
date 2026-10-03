@@ -44,13 +44,17 @@ const getEnvValue = (...names) => {
   return "";
 };
 
-const ipv4Lookup = (hostname, options, callback) => {
-  dns.lookup(hostname, { ...options, family: 4 }, (err, address, family) => {
-    callback(err, address, family);
-  });
+const resolveIPv4 = async (hostname) => {
+  try {
+    const { address } = await dns.promises.lookup(hostname, { family: 4 });
+    return address;
+  } catch (err) {
+    console.warn(`[email] DNS IPv4 lookup failed for ${hostname}:`, err.message);
+    return hostname;
+  }
 };
 
-const getMailConfig = () => {
+const getMailConfig = async () => {
   const sendgridApiKey = cleanSecret(getEnvValue("SENDGRID_API_KEY", "SENDGRID_KEY"));
   const resendApiKey = cleanSecret(getEnvValue("RESEND_API_KEY", "RESEND_KEY"));
   const smtpHost = cleanValue(getEnvValue("SMTP_HOST", "EMAIL_HOST", "MAIL_HOST"));
@@ -70,6 +74,8 @@ const getMailConfig = () => {
   }
 
   if (sendgridApiKey) {
+    const targetHost = "smtp.sendgrid.net";
+    const resolvedIp = await resolveIPv4(targetHost);
     return {
       provider: "sendgrid",
       account: "apikey",
@@ -77,18 +83,20 @@ const getMailConfig = () => {
       apiKey: sendgridApiKey,
       sendViaApi: true,
       transport: {
-        host: "smtp.sendgrid.net",
+        host: resolvedIp,
         port: smtpPort || 587,
         secure: false,
-        lookup: ipv4Lookup,
         auth: {
           user: "apikey",
           pass: sendgridApiKey,
         },
+        tls: {
+          servername: targetHost,
+          rejectUnauthorized: false,
+        },
         connectionTimeout: 15000,
         greetingTimeout: 15000,
         socketTimeout: 20000,
-        family: 4,
       },
     };
   }
@@ -100,27 +108,27 @@ const getMailConfig = () => {
 
     const secureEnv = getEnvValue("SMTP_SECURE", "EMAIL_SECURE", "MAIL_SECURE");
     const isSecure = secureEnv ? String(secureEnv).toLowerCase() === "true" : (smtpPort === 465);
+    const resolvedIp = await resolveIPv4(smtpHost);
 
     return {
       provider: "smtp",
       account: smtpUser,
       from: mailFrom || smtpUser,
       transport: {
-        host: smtpHost,
+        host: resolvedIp,
         port: smtpPort || 587,
         secure: isSecure,
-        lookup: ipv4Lookup,
         auth: {
           user: smtpUser,
           pass: smtpPass,
         },
+        tls: {
+          servername: smtpHost,
+          rejectUnauthorized: false,
+        },
         connectionTimeout: 15000,
         greetingTimeout: 15000,
         socketTimeout: 20000,
-        family: 4,
-        tls: {
-          rejectUnauthorized: false,
-        },
       },
     };
   }
@@ -134,27 +142,28 @@ const getMailConfig = () => {
     const portNumber = explicitPort ? Number(explicitPort) : 465;
     const explicitSecure = getEnvValue("EMAIL_SECURE", "MAIL_SECURE", "SMTP_SECURE");
     const isSecure = explicitSecure ? String(explicitSecure).toLowerCase() === "true" : (portNumber === 465);
+    const targetHost = "smtp.gmail.com";
+    const resolvedIp = await resolveIPv4(targetHost);
 
     return {
       provider: "gmail",
       account: smtpUser,
       from: mailFrom || `"Campus Resell Portal" <${smtpUser}>`,
       transport: {
-        host: "smtp.gmail.com",
+        host: resolvedIp,
         port: portNumber,
         secure: isSecure,
-        lookup: ipv4Lookup,
         auth: {
           user: smtpUser,
           pass: smtpPass,
         },
         tls: {
+          servername: targetHost,
           rejectUnauthorized: false,
         },
         connectionTimeout: 15000,
         greetingTimeout: 15000,
         socketTimeout: 20000,
-        family: 4, // 🔒 Crucial for Render: forces IPv4 only to prevent ENETUNREACH IPv6 errors
       },
     };
   }
@@ -164,10 +173,10 @@ const getMailConfig = () => {
   );
 };
 
-const getTransporter = () => {
+const getTransporter = async () => {
   if (cachedTransporter) return cachedTransporter;
 
-  const config = getMailConfig();
+  const config = await getMailConfig();
   if (config.sendViaApi) {
     cachedTransporter = {
       provider: config.provider,
@@ -203,7 +212,7 @@ const getTransporter = () => {
 };
 
 export const sendEmail = async (to, subject, html) => {
-  const transporter = getTransporter();
+  const transporter = await getTransporter();
   const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 
   console.log(`[email] sending provider=${transporter.provider} to=${to} subject=${subject}`);
@@ -288,7 +297,7 @@ export const sendEmail = async (to, subject, html) => {
 
 export const verifyEmailTransport = async () => {
   try {
-    const transporter = getTransporter();
+    const transporter = await getTransporter();
     if (transporter.sendViaApi) {
       return {
         success: true,
