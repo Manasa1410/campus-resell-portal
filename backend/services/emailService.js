@@ -44,6 +44,12 @@ const getEnvValue = (...names) => {
   return "";
 };
 
+const ipv4Lookup = (hostname, options, callback) => {
+  dns.lookup(hostname, { ...options, family: 4 }, (err, address, family) => {
+    callback(err, address, family);
+  });
+};
+
 const getMailConfig = () => {
   const sendgridApiKey = cleanSecret(getEnvValue("SENDGRID_API_KEY", "SENDGRID_KEY"));
   const resendApiKey = cleanSecret(getEnvValue("RESEND_API_KEY", "RESEND_KEY"));
@@ -74,6 +80,7 @@ const getMailConfig = () => {
         host: "smtp.sendgrid.net",
         port: smtpPort || 587,
         secure: false,
+        lookup: ipv4Lookup,
         auth: {
           user: "apikey",
           pass: sendgridApiKey,
@@ -91,6 +98,9 @@ const getMailConfig = () => {
       throw new Error("SMTP_HOST is set, but SMTP credentials are missing.");
     }
 
+    const secureEnv = getEnvValue("SMTP_SECURE", "EMAIL_SECURE", "MAIL_SECURE");
+    const isSecure = secureEnv ? String(secureEnv).toLowerCase() === "true" : (smtpPort === 465);
+
     return {
       provider: "smtp",
       account: smtpUser,
@@ -98,7 +108,8 @@ const getMailConfig = () => {
       transport: {
         host: smtpHost,
         port: smtpPort || 587,
-        secure: String(getEnvValue("SMTP_SECURE", "EMAIL_SECURE", "MAIL_SECURE") || "false") === "true",
+        secure: isSecure,
+        lookup: ipv4Lookup,
         auth: {
           user: smtpUser,
           pass: smtpPass,
@@ -107,6 +118,9 @@ const getMailConfig = () => {
         greetingTimeout: 15000,
         socketTimeout: 20000,
         family: 4,
+        tls: {
+          rejectUnauthorized: false,
+        },
       },
     };
   }
@@ -118,7 +132,8 @@ const getMailConfig = () => {
 
     const explicitPort = getEnvValue("EMAIL_PORT", "MAIL_PORT", "SMTP_PORT");
     const portNumber = explicitPort ? Number(explicitPort) : 465;
-    const isSecure = explicitPort ? String(getEnvValue("EMAIL_SECURE", "MAIL_SECURE") || "false") === "true" : true;
+    const explicitSecure = getEnvValue("EMAIL_SECURE", "MAIL_SECURE", "SMTP_SECURE");
+    const isSecure = explicitSecure ? String(explicitSecure).toLowerCase() === "true" : (portNumber === 465);
 
     return {
       provider: "gmail",
@@ -128,6 +143,7 @@ const getMailConfig = () => {
         host: "smtp.gmail.com",
         port: portNumber,
         secure: isSecure,
+        lookup: ipv4Lookup,
         auth: {
           user: smtpUser,
           pass: smtpPass,
@@ -258,6 +274,7 @@ export const sendEmail = async (to, subject, html) => {
     console.log(`[email] sent provider=${transporter.provider} to=${to} messageId=${info.messageId || "n/a"}`);
     return info;
   } catch (error) {
+    cachedTransporter = null;
     const setupHint =
       transporter.provider === "gmail" && ["EAUTH", "EENVELOPE"].includes(error.code)
         ? " For Gmail/Google Workspace, use an app password and make sure the MAIL_FROM address matches the authenticated account."
