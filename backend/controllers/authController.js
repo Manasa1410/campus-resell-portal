@@ -340,7 +340,7 @@ export const forgotPassword = async (req, res) => {
     if (!user) {
       return res.status(404).json({
         success: false,
-        message: "User not found",
+        message: "No account found with this email address. Please verify your email or register a new account.",
       });
     }
 
@@ -361,9 +361,8 @@ export const forgotPassword = async (req, res) => {
       user.resetPasswordExpire = undefined;
       await user.save().catch(() => {});
 
-      const errorMessage = process.env.NODE_ENV === "production"
-        ? "Unable to send password reset OTP right now. Please try again later."
-        : err.message || "Unable to send password reset OTP right now.";
+      const errorMessage =
+        err.message || "Unable to send password reset OTP right now. Please verify email server settings.";
 
       return res.status(500).json({
         success: false,
@@ -373,7 +372,7 @@ export const forgotPassword = async (req, res) => {
 
     return res.json({
       success: true,
-      message: "OTP sent to email. Please check your inbox.",
+      message: "OTP sent to email. Please check your inbox and spam/junk folder.",
     });
   } catch (err) {
     res.status(500).json({
@@ -387,7 +386,7 @@ export const forgotPassword = async (req, res) => {
 // 🔄 Reset Password
 export const resetPassword = async (req, res) => {
   try {
-    const token = req.params.token;
+    const token = String(req.params.token || "").trim();
 
     const hashedToken = crypto
       .createHash("sha256")
@@ -431,13 +430,14 @@ export const resetPassword = async (req, res) => {
 export const verifyResetOtp = async (req, res) => {
   try {
     const { otp } = req.body;
-    if (!otp) {
+    const otpString = String(otp || "").trim();
+    if (!otpString) {
       return res.status(400).json({ success: false, message: "OTP is required" });
     }
 
     const hashedToken = crypto
       .createHash("sha256")
-      .update(otp)
+      .update(otpString)
       .digest("hex");
 
     const user = await User.findOne({

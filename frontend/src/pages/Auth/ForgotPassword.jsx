@@ -22,11 +22,11 @@ const ForgotPassword = () => {
 
     try {
       setLoading(true);
-      await API.post("/auth/forgot-password", { email: normalizedEmail });
-      toast.success("OTP sent to your email");
+      const res = await API.post("/auth/forgot-password", { email: normalizedEmail });
+      toast.success(res.data?.message || "OTP sent! Check your inbox & spam folder.");
       navigate("/reset-password");
     } catch (err) {
-      toast.error(err.response?.data?.message || "Error sending reset link");
+      toast.error(err.response?.data?.message || "Error sending reset OTP");
     } finally {
       setLoading(false);
     }
