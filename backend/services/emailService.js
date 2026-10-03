@@ -46,13 +46,22 @@ const getEnvValue = (...names) => {
 
 const getMailConfig = () => {
   const sendgridApiKey = cleanSecret(getEnvValue("SENDGRID_API_KEY", "SENDGRID_KEY"));
+  const resendApiKey = cleanSecret(getEnvValue("RESEND_API_KEY", "RESEND_KEY"));
   const smtpHost = cleanValue(getEnvValue("SMTP_HOST", "EMAIL_HOST", "MAIL_HOST"));
   const smtpPort = Number(getEnvValue("SMTP_PORT", "EMAIL_PORT", "MAIL_PORT") || 587);
   const smtpUser = cleanValue(getEnvValue("SMTP_USER", "SMTP_USERNAME", "EMAIL_USER", "MAIL_USERNAME", "GMAIL_USER"));
   const smtpPass = cleanSecret(getEnvValue("SMTP_PASS", "SMTP_PASSWORD", "EMAIL_PASS", "MAIL_PASSWORD", "GMAIL_PASS"));
   const mailFrom = cleanValue(getEnvValue("MAIL_FROM", "EMAIL_FROM", "SMTP_FROM"));
-  const emailPort = Number(getEnvValue("EMAIL_PORT", "MAIL_PORT") || 587);
-  const emailSecure = String(getEnvValue("EMAIL_SECURE", "MAIL_SECURE") || (emailPort === 465 ? "true" : "false")) === "true";
+
+  if (resendApiKey) {
+    return {
+      provider: "resend",
+      account: "apikey",
+      from: mailFrom || "Campus Resell Portal <onboarding@resend.dev>",
+      apiKey: resendApiKey,
+      sendViaApi: true,
+    };
+  }
 
   if (sendgridApiKey) {
     return {
@@ -69,9 +78,9 @@ const getMailConfig = () => {
           user: "apikey",
           pass: sendgridApiKey,
         },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 15000,
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 20000,
         family: 4,
       },
     };
@@ -94,9 +103,9 @@ const getMailConfig = () => {
           user: smtpUser,
           pass: smtpPass,
         },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 15000,
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 20000,
         family: 4,
       },
     };
@@ -107,31 +116,48 @@ const getMailConfig = () => {
       throw new Error("SMTP credentials must include both username and password.");
     }
 
+    const explicitPort = getEnvValue("EMAIL_PORT", "MAIL_PORT", "SMTP_PORT");
+    const useExplicitHostPort = explicitPort && explicitPort !== "465";
+
     return {
       provider: "gmail",
       account: smtpUser,
       from: mailFrom || `"Campus Resell Portal" <${smtpUser}>`,
-      transport: {
-        host: "smtp.gmail.com",
-        port: emailPort,
-        secure: emailSecure,
-        auth: {
-          user: smtpUser,
-          pass: smtpPass,
-        },
-        tls: {
-          rejectUnauthorized: false,
-        },
-        connectionTimeout: 10000,
-        greetingTimeout: 10000,
-        socketTimeout: 15000,
-        family: 4,
-      },
+      transport: useExplicitHostPort
+        ? {
+            host: "smtp.gmail.com",
+            port: Number(explicitPort),
+            secure: String(getEnvValue("EMAIL_SECURE", "MAIL_SECURE") || "false") === "true",
+            auth: {
+              user: smtpUser,
+              pass: smtpPass,
+            },
+            tls: {
+              rejectUnauthorized: false,
+            },
+            connectionTimeout: 15000,
+            greetingTimeout: 15000,
+            socketTimeout: 20000,
+            family: 4,
+          }
+        : {
+            service: "gmail",
+            auth: {
+              user: smtpUser,
+              pass: smtpPass,
+            },
+            tls: {
+              rejectUnauthorized: false,
+            },
+            connectionTimeout: 15000,
+            greetingTimeout: 15000,
+            socketTimeout: 20000,
+          },
     };
   }
 
   throw new Error(
-    "Email is not configured. Set SENDGRID_API_KEY, or SMTP_HOST/SMTP credentials, or EMAIL_USER/EMAIL_PASS."
+    "Email is not configured. Set SENDGRID_API_KEY, RESEND_API_KEY, or SMTP_HOST/SMTP credentials, or EMAIL_USER/EMAIL_PASS."
   );
 };
 
@@ -178,6 +204,32 @@ export const sendEmail = async (to, subject, html) => {
   const text = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
 
   console.log(`[email] sending provider=${transporter.provider} to=${to} subject=${subject}`);
+
+  if (transporter.provider === "resend" && transporter.sendViaApi) {
+    const response = await fetch("https://api.resend.com/emails", {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${transporter.apiKey}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        from: transporter.defaultFrom,
+        to: [to],
+        subject,
+        html,
+        text,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error(`[email] failed provider=resend-api to=${to} status=${response.status} message=${errorText}`);
+      throw new Error(`Unable to send email right now: Resend API returned ${response.status}`);
+    }
+
+    console.log(`[email] sent provider=resend-api to=${to}`);
+    return { messageId: response.headers.get("x-message-id") || undefined };
+  }
 
   if (transporter.provider === "sendgrid" && transporter.sendViaApi) {
     const response = await fetch("https://api.sendgrid.com/v3/mail/send", {
