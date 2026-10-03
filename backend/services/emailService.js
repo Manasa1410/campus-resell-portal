@@ -117,42 +117,29 @@ const getMailConfig = () => {
     }
 
     const explicitPort = getEnvValue("EMAIL_PORT", "MAIL_PORT", "SMTP_PORT");
-    const useExplicitHostPort = explicitPort && explicitPort !== "465";
+    const portNumber = explicitPort ? Number(explicitPort) : 465;
+    const isSecure = explicitPort ? String(getEnvValue("EMAIL_SECURE", "MAIL_SECURE") || "false") === "true" : true;
 
     return {
       provider: "gmail",
       account: smtpUser,
       from: mailFrom || `"Campus Resell Portal" <${smtpUser}>`,
-      transport: useExplicitHostPort
-        ? {
-            host: "smtp.gmail.com",
-            port: Number(explicitPort),
-            secure: String(getEnvValue("EMAIL_SECURE", "MAIL_SECURE") || "false") === "true",
-            auth: {
-              user: smtpUser,
-              pass: smtpPass,
-            },
-            tls: {
-              rejectUnauthorized: false,
-            },
-            connectionTimeout: 15000,
-            greetingTimeout: 15000,
-            socketTimeout: 20000,
-            family: 4,
-          }
-        : {
-            service: "gmail",
-            auth: {
-              user: smtpUser,
-              pass: smtpPass,
-            },
-            tls: {
-              rejectUnauthorized: false,
-            },
-            connectionTimeout: 15000,
-            greetingTimeout: 15000,
-            socketTimeout: 20000,
-          },
+      transport: {
+        host: "smtp.gmail.com",
+        port: portNumber,
+        secure: isSecure,
+        auth: {
+          user: smtpUser,
+          pass: smtpPass,
+        },
+        tls: {
+          rejectUnauthorized: false,
+        },
+        connectionTimeout: 15000,
+        greetingTimeout: 15000,
+        socketTimeout: 20000,
+        family: 4, // 🔒 Crucial for Render: forces IPv4 only to prevent ENETUNREACH IPv6 errors
+      },
     };
   }
 
